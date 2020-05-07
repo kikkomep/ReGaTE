@@ -17,7 +17,7 @@ import sys
 import ruamel.yaml
 import rdflib
 import argparse
-import regate
+from . import regate
 
 from bioblend.galaxy import GalaxyInstance
 from bioblend.galaxy.client import ConnectionError
@@ -81,7 +81,7 @@ def return_formatted_edam(edam):
     :param edam:
     :return:
     """
-    edam = string.split(edam, '_')
+    edam = str.split(edam, '_')
     edam = "EDAM_{}:{:0>4d}".format(edam[0], int(edam[1]))
     return edam
 
@@ -91,7 +91,7 @@ def http_to_edamform(url):
     :param url:
     :return:
     """
-    base = string.split(os.path.basename(url), '_')
+    base = str.split(os.path.basename(url), '_')
     return str("EDAM_{}:{:0>4d}").format(base[0], int(base[1]))
 
 
@@ -173,7 +173,7 @@ def add_datas(dict_map, rel_format_formats, rel_format_data, term_labels):
     :return:
     """
     import copy
-    for key, value in dict_map.iteritems():
+    for key, value in dict_map.items():
         formats = copy.copy(value)
         datas = add_data(formats, rel_format_formats, rel_format_data, list_edam_data=[])
         datas_v = [{'uri':data_item,'term':term_labels.get(data_item,'')} for data_item in datas]
@@ -202,11 +202,11 @@ def galaxy_to_edamdict(url, key):
     datatypeclient = EdamDatatypesClient(gi)
     try:
         dict_map = datatypeclient.get_edam_formats()
-    except ConnectionError, e:
+    except ConnectionError as e:
         raise ConnectionError(
             '{0}, The Galaxy data can\'t be used, It\'s possible that Galaxy is too old, please update it\n'.format(e))
     dictmapping = {}
-    for key, value in dict_map.iteritems():
+    for key, value in dict_map.items():
         form_edam = return_formatted_edam(value)
         dictmapping[str(key)] = [form_edam]
     return dictmapping

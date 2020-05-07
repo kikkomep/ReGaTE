@@ -179,7 +179,7 @@ def build_tool_name(tool_id, prefix, suffix):
     and the prefix/suffix defined in the config file
     """
     try:
-        tool_name = string.split(tool_id, '/')[-2]
+        tool_name = str.split(tool_id, '/')[-2]
     except IndexError:
         tool_name = tool_id
     tool_name = re.sub('[^0-9a-zA-Z\_\-\.\~]', '-', tool_name)
@@ -208,7 +208,7 @@ def get_source_registry(tool_id):
 def build_filename(tool_id, version):
     try:
         try:
-            source = string.split(tool_id, '/')[-2]
+            source = str.split(tool_id, '/')[-2]
         except IndexError:
             source = tool_id
         return source + "_" + version
@@ -237,7 +237,7 @@ def detect_toolid_duplicate(tool_list):
     for tool in tool_list:
         id_list.append(build_filename(tool['id'], tool['version']))
 
-    duplicate_tools = [item for item, count in collections.Counter(id_list).items() if count > 1]
+    duplicate_tools = [item for item, count in list(collections.Counter(id_list).items()) if count > 1]
     if duplicate_tools:
         for dup in duplicate_tools:
             logger.warning("The tool {0} is present multiple times on this instance with the same version.".format(dup))
@@ -509,7 +509,7 @@ def build_edam_dict(yaml_file):
     # map_edam = extract_edam_from_galaxy()
     with open(yaml_file, "r") as file_edam:
         map_edam = ruamel.yaml.load(file_edam, Loader=ruamel.yaml.Loader)
-        for key, value in map_edam.iteritems():
+        for key, value in map_edam.items():
             for term in value['formats']:
                 term['uri'] = edam_to_uri(term['uri'], 'format')
             for term in value['data']:
@@ -639,7 +639,7 @@ def clean_dict(jsondict):
     :param jsondict:
     :return:
     """
-    for sonkey, sonvalue in jsondict.items():
+    for sonkey, sonvalue in list(jsondict.items()):
         if sonvalue:
             if isinstance(sonvalue, dict):
                 clean_dict(sonvalue)
@@ -759,7 +759,7 @@ def run():
             gi.verify = False
             try:
                 TOOLS = gi.tools.get_tools()
-            except ConnectionError, e:
+            except ConnectionError as e:
                 raise ConnectionError("Connection with the Galaxy server {0} failed, {1}".format(config.galaxy_url_api,
                                                                                                  e))
 
@@ -775,7 +775,7 @@ def run():
                     try:
                         tool_metadata = gi.tools.show_tool(tool_id=tool['id'], io_details=True, link_details=True)
                         tools_meta_data.append(tool_metadata)
-                    except ConnectionError, e:
+                    except ConnectionError as e:
                         logger.error(
                             "Error during connection with exposed API method for tool {0}".format(str(tool['id'])),
                             exc_info=True)
