@@ -20,9 +20,9 @@ setup(
     packages=['regate'],
     install_requires=[
         'ruamel.yaml',
-        'html5lib==1.0b8',
+        'html5lib',
         'rdflib',
-        'cheetah',
+        'Cheetah3',
         'requests',
         'configparser',
         'bioblend',
