@@ -412,16 +412,19 @@ def build_function_dict(json_tool, mapping_edam):
     :rtype: list
     """
     list_func = []
-
     listinps = inputs_extract(json_tool['inputs'], mapping_edam)
-
     listoutps = outputs_extract(json_tool['outputs'], mapping_edam, listinps)
+    if 'edam_operations' in json_tool and len(json_tool['edam_operations']) > 0:
+        edam_operation = [{'url': edam_to_uri(o, 'operation')} for o in json_tool['edam_operations']]
+    else:
+        edam_operation = [DEFAULT_EDAM_OPERATION]
+    logger.debug("EDAM operation: %r -- %r -- %r", edam_operation, DEFAULT_EDAM_OPERATION, json_tool['edam_operations'])
     func_dict = {
-        'functionDescription': json_tool['description'],
         'operation': [DEFAULT_EDAM_OPERATION],
         'output': listoutps,
         'input': listinps,
-        'functionHandle': "functionHandle"
+        'note': json_tool['config']['help'],
+        'cmd': json_tool['config']['command']
     }
     list_func.append(func_dict)
     return list_func
@@ -441,8 +444,19 @@ def inputs_extract(inputs_json, mapping_edam):
         :param data_json:
         :return: None
         """
-        data_types = [find_edam_data(extension, mapping_edam) for extension in data_json["extensions"]]
-        data_formats = [find_edam_format(extension, mapping_edam) for extension in data_json["extensions"]]
+        data_types = None
+        data_formats = None
+        if "edam" in data_json and "edam_formats" in data_json["edam"]:
+            data_formats = [{'uri': edam_to_uri(f, 'format')} for f in data_json["edam"]["edam_formats"]]
+        else:
+            data_formats = [find_edam_format(extension, mapping_edam) for extension in data_json["extensions"]]
+        if "edam" in data_json and "edam_data" in data_json["edam"]:
+            data_types = [{'uri': edam_to_uri(d, 'data')} for d in data_json["edam"]["edam_data"]]
+        else:
+            data_types = [find_edam_data(extension, mapping_edam) for extension in data_json["extensions"]]
+
+        # data_types = [find_edam_data(extension, mapping_edam) for extension in data_json["extensions"]]
+        # data_formats = [find_edam_format(extension, mapping_edam) for extension in data_json["extensions"]]
         if len(data_types) == 1:
             data_item = {'data': data_types[0],
                          'format': data_formats,
@@ -510,13 +524,18 @@ def outputs_extract(outputs_json, mapping_edam, biotools_inputs):
     for output in outputs_json:
         if output['format'] != 'input':
             try:
-                outputdict = {'data': find_edam_data(output['format'], mapping_edam),
-                              'format': [find_edam_format(output['format'], mapping_edam)],
-                              'dataHandle': output['format'], 'dataDescription': output['name']
-                              }
+                edam_data = {'uri': edam_to_uri(output["edam_data"], 'data')} \
+                    if "edam_data" in output else find_edam_data(output['format'], mapping_edam)
+                edam_format = [{'uri': edam_to_uri(output["edam_format"], 'format')}] \
+                    if "edam_format" in output else find_edam_format(output['format'], mapping_edam)
+                outputdict = {
+                    'data': edam_data,
+                    'format': edam_format,
+                    'dataHandle': output['format'], 'dataDescription': output['name']
+                }
             except KeyError:
-                    logger.warning(
-                        "EDAM MAPPING: TERM ----{0}---- is missing from EDAM current version".format(output['format']))
+                logger.warning(
+                    "EDAM MAPPING: TERM ----{0}---- is missing from EDAM current version".format(output['format']))
         else:
             # FIXME: copying the datatype/format from the source would work if only the Galaxy API used
             # by bioblend sent the format_source information
