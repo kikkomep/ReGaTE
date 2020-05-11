@@ -14,20 +14,24 @@ Created on Oct. 23, 2014
 import sys
 import re
 import os
+import json
+import copy
 import glob
 import shutil
 import string
+import urllib
+import tarfile
 import argparse
-import json
-import ruamel.yaml
 import requests
 import getpass
-import copy
 import logging
-import configparser
+import tempfile
+import xmltodict
+import ruamel.yaml
 import collections
-
+import configparser
 from lxml import etree
+from urllib.parse import urljoin
 from Cheetah.Template import Template
 from bioblend.galaxy.client import ConnectionError
 from bioblend.galaxy import GalaxyInstance
