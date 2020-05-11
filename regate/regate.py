@@ -636,20 +636,23 @@ def push_to_elix(login, host, ssl_verify, tool_dir, resourcename, xsd=None):
     logger.debug("attempting to delete all registered services in collection {0}...".format(resourcename))
     for resource in resources:
         try:
+            # FIXME added /version/none because not specifying it currently raises an error on dev.bio.tools :(
+            resource_version = resource['version'][0] if 'version' in resource and len(
+                resource['version']) > 0 else 'none'
             logger.debug("checking resource {0}...".format(resource['id']))
-            res_url = host + '/api/tool/{0}/version/{1}'.format(resource['id'], resource.get('version', 'none'))
+            res_url = urljoin(host,
+                              '/api/tool/{0}/version/{1}'.format(resource['id'], resource_version))
             resp = requests.get(res_url, headers={'Accept': 'application/json', 'Content-type': 'application/json',
                                                   'Authorization': 'Token {0}'.format(token)})
             if resp.status_code != 200:
-                res_url = host + '/api/tool/{0}/version/none'.format(resource['id'])
+                res_url = urljoin(host, '/api/tool/{0}'.format(resource['id']))
                 resp = requests.get(res_url, headers={'Accept': 'application/json', 'Content-type': 'application/json',
                                                       'Authorization': 'Token {0}'.format(token)})
             res_full = resp.json()
             logger.debug('{0} in {1}: {2}'.format(resourcename, res_full.get(
-                'collection', []), resourcename in res_full.get('collection', [])))
-            if resourcename in res_full.get('collection', []):
+                'collectionID', []), resourcename in res_full.get('collectionID', [])))
+            if resourcename in res_full.get('collectionID', []):
                 logger.debug("removing resource " + resource['id'])
-                # FIXME added /version/none because not specifying it currently raises an error on dev.bio.tools :(
                 resp = requests.delete(
                     res_url, headers={'Accept': 'application/json', 'Content-type': 'application/json',
                                       'Authorization': 'Token {0}'.format(token)})
@@ -844,8 +847,7 @@ def run():
             try:
                 TOOLS = gi.tools.get_tools()
             except ConnectionError as e:
-                raise ConnectionError("Connection with the Galaxy server {0} failed, {1}".format(config.galaxy_url_api,
-                                                                                                 e))
+                raise ConnectionError("Connection with the Galaxy server {0} failed, {1}".format(config.galaxy_url_api, e))
 
             tools_meta_data = []
             if config.yaml_file:
@@ -858,11 +860,10 @@ def run():
                 if not tool['id'] in tools_list:
                     try:
                         tool_metadata = gi.tools.show_tool(tool_id=tool['id'], io_details=True, link_details=True)
+                        tool_metadata['config'] = get_galaxy_tool_wrapper_config_file(tool['id'], config)
                         tools_meta_data.append(tool_metadata)
                     except ConnectionError as e:
-                        logger.error(
-                            "Error during connection with exposed API method for tool {0}".format(str(tool['id'])),
-                            exc_info=True)
+                        logger.error("Error during connection with exposed API method for tool {0}".format(str(tool['id'])), exc_info=True)
             build_biotools_files(tools_meta_data, config, edam_dict)
 
         if config.onlypush:
