@@ -289,7 +289,7 @@ def find_edam_data(format_name, mapping_edam):
     return edam_data
 
 
-def build_general_dict(tool_meta_data, conf):
+def build_metadata_dict(tool_meta_data, mapping_edam, conf):
     """
     Extract informations from a galaxy json tool and return the general json in the biotools format
     :param tool_meta_data: galaxy json tool
@@ -301,65 +301,103 @@ def build_general_dict(tool_meta_data, conf):
         description = format_description(tool_meta_data['description'])
     else:
         description = 'Galaxy tool {0}.'.format(tool_meta_data['description'])
-    gen_dict = {
-        'version': tool_meta_data['version'],
-        'versionID': tool_meta_data['version'],
+
+    metadata = {
+        ##### SUMMARY GROUP #########################################################################################
+        'name': build_tool_name(tool_meta_data['name'], conf.prefix_toolname, conf.suffix_toolname),
         'description': description,
+        'homepage': "{0}?tool_id={1}".format(urljoin(conf.galaxy_url, '/tool_runner'),
+                                             requests.utils.quote(tool_meta_data['id'])),
+        'version': [tool_meta_data['version']],
+        # TODO: check if required or auto filled on registration
+        # to obtain an uniq id in galaxy we need the toolshed repository, the owner, the xml toolid, the xml version,
+        # if the tool provide from a toolshed, if not we need the xml toolid and the xml version only
+        # The easiest : use id of the tool
+        'biotoolsID': tool_meta_data['id'],
+        'biotoolsCURIE': 'biotools:'+tool_meta_data['id'],
+        'otherID': [
+        ],
+
+        ##### FUNCTION GROUP ######################################################################################
+        'function': build_function_dict(tool_meta_data, mapping_edam),
+
+        ##### LABELS GROUP ######################################################################################
+        'toolType': ["Workbench"],  # TODO: check if it is OK
+        'topic': tool_meta_data['edam_topics'] \
+        if 'edam_topics' in tool_meta_data and len(tool_meta_data['edam_topics']) > 0 \
+        else [DEFAULT_EDAM_TOPIC],
+        # TODO: check if can be detected from XML configuration file
+        'operatingSystem': ['Linux'],
+        'language': [],
+        'license': '',  # TOD: check whether can be dectected inspecting the web site
+        'collectionID': [conf.resourcename],
+        'maturity': '',  # Available values: Mature, Emerging, Legacy
+        # Avaialbe values: "Free of charge", "Free of charge (with restrictions)", "Commercial"
+        'cost': '',
+        # Available values: "Open access", "Restricted access",
+        'accessibility': [conf.accessibility],
+        'ELIXIRPlatform': '',
+        'ELIXIRNode': '',
+
+        ##### Link GROUP ######################################################################################
+        # Miscellaneous links for the software: e.g., repository, issue tracker, etc.
+        # see https://biotools.readthedocs.io/en/latest/curators_guide.html#linktype for the available link types
+        'link': [
+            {
+                'type': 'Galaxy service',
+                'url': urljoin(conf.galaxy_url, tool_meta_data['link']),
+                'note': "Run tool <b>{}</b> on the Galaxy Platform".format(tool_meta_data['id'])
+            },
+            {
+                'type': 'Other',
+                'url': urljoin(conf.galaxy_url, "{}/{}?".format('api/tools', tool_meta_data['id'], 'io_details=true&link_details=true')),
+                'note': "Tool metadata available on the Galaxy Platform"
+            }
+        ],
+
+        ##### Download GROUP ######################################################################################
+        'download': [
+            {
+                'type': 'Tool wrapper (galaxy)',
+                'url': urljoin(conf.galaxy_url, "{}/{}/{}".format('api/tools/', tool_meta_data['id'], 'download')),
+                'note': "Tool name: {}. Description: {}".format(tool_meta_data['name'], tool_meta_data['description']),
+                'version': tool_meta_data['version']
+            }
+        ],
+
+        ##### Documentation GROUP ######################################################################################
+        'documentation': [],
+
+        ##### Publication GROUP ######################################################################################
+        'publication': [],  # TODO: see how "/citations" works
+
+        ##### Relation GROUP ######################################################################################
+        'relation': [],  # TODO: see if it is reasonable to connect tools on platform basis
+
+        ##### Credit GROUP ######################################################################################
+        'credit': [
+            {
+                'name': conf.contactName,
+                'email': conf.contactEmail,
+                'url': conf.contactUrl,
+                'tel': conf.contactTel,
+                'typeEntity': conf.contactTypeEntity,
+                'typeRole': conf.contactTypeRole.split("."),
+                # FIXME: to be completed
+                'orcidid': '',
+                'gridid': '',
+                'note': ''
+            }
+        ],
+
+        # FIXME: to remap
         'uses': [{
             "usesName": 'Toolshed entry for "' + tool_meta_data['id'] + '"',
             "usesHomepage": 'http://' + requests.utils.quote(tool_meta_data['id']),
             "usesVersion": tool_meta_data['version']
-        }],
-        'collection': [conf.resourcename],
-        # we need to find a 50 chars or less string for sourceRegistry
-        # 'sourceRegistry': get_source_registry(tool_meta_data['id']),
-        'resourceType': ["Tool"],
-        'maturity': 'Mature',
-        'platform': ['Linux'],
-        'interface': [{
-            'interfaceType': "Web UI",
-            'interfaceDocs': '',
-            'interfaceSpecURL': '',
-            'interfaceSpecFormat': ''
-        }],
-        'topic': [DEFAULT_EDAM_TOPIC],
-        'publications': {'publicationsPrimaryID': "None", 'publicationsOtherID': []},
-        'homepage': "{0}?tool_id={1}".format(conf.galaxy_url + '/tool_runner',
-                                             requests.utils.quote(tool_meta_data['id'])),
-        'accessibility': [conf.accessibility],
-        'mirror': [],
-        'canonicalID': '',
-        'tag': [],
-        'elixirInfo': {
-            'elixirStatus': '',
-            'elixirNode': ''
-        },
-        'language': [],
-        'license': '',
-        'cost': '',
-        'docs': {
-            'docsHome': '',
-            'docsTermsOfUse': '',
-            'docsDownload': '',
-            'docsCitationInstructions': ''
-        },
-        'credit': {
-            'creditsDeveloper': [],
-            'creditsContributor': [],
-            'creditsInstitution': [],
-            'creditsInfrastructure': [],
-            'creditsFunding': []
-        },
-        'contact': [{
-            'email': conf.contactEmail,
-            'url': '',
-            'name': conf.contactName,
-            'tel': '',
-            'contactRole': []
-        }],
-        'toolType': ['Web application']
+        }]
     }
-    return gen_dict
+    return metadata
 
 
 def build_function_dict(json_tool, mapping_edam):
