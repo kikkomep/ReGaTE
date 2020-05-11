@@ -764,19 +764,11 @@ def write_xml_files(tool_name, general_dict, tool_dir, xmltemplate=None):
             tool_file.write(str(template))
 
 def map_tool(tool_meta, conf, mapping_edam):
-    tool_name = build_tool_name(tool_meta['id'], conf.prefix_toolname, conf.suffix_toolname)
-    general_dict = build_general_dict(tool_meta, conf)
-
-    general_dict["function"] = build_function_dict(tool_meta, mapping_edam)
-    # to obtain an uniq id in galaxy we need the toolshed repository, the owner, the xml toolid, the xml version,
-    # if the tool provide from a toolshed, if not we need the xml toolid and the xml version only
-    # The easiest : use id of the tool
-    # general_dict["name"] = tool_meta['id']
-    general_dict["name"] = tool_name
-    general_dict["id"] = tool_name[0:24]
+    general_dict = build_metadata_dict(tool_meta, mapping_edam, conf)
     cleaned_dict = copy.deepcopy(general_dict)
     clean_dict(cleaned_dict)
-    return cleaned_dict 
+    return cleaned_dict
+
 
 def build_biotools_files(tools_metadata, conf, mapping_edam):
     """
