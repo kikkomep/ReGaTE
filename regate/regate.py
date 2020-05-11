@@ -559,6 +559,29 @@ def build_edam_dict(yaml_file):
     return map_edam
 
 
+def get_galaxy_tool_wrapper_config_file(tool_id, config):
+    temp = tempfile.NamedTemporaryFile()
+    temp_dir = tempfile.TemporaryDirectory()
+    try:
+        gi = GalaxyInstance(config.galaxy_url_api, key=config.api_key)
+        tool_url = '{}/{}/download'.format(gi.tools.url, tool_id)
+        r = gi.tools._get(url=tool_url, json=False)
+        if r.status_code == 200:
+            with open(temp.name, "wb") as out:
+                out.write(r.content)
+            tar_archive = tarfile.open(temp.name, 'r:gz')
+            files = [f for f in tar_archive.getnames() if f.endswith('xml')]
+            if len(files) > 1:
+                logger.warn("Unable to detect the wrapper config file: more than one XML file found!")
+                return None
+            tar_archive.extractall(path=temp_dir.name)
+            with open(os.path.join(temp_dir.name, files[0])) as file:
+                return xmltodict.parse(file.read())['tool']
+    finally:
+        temp.close()
+        temp_dir.cleanup()
+
+
 def auth(login, host, ssl_verify):
     """
     :param login:
