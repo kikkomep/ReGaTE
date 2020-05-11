@@ -760,8 +760,9 @@ def write_xml_files(tool_name, general_dict, tool_dir, xmltemplate=None):
         template_path = get_data_path('xmltemplate.tmpl')
 
     with open(os.path.join(tool_dir, tool_name + ".xml"), 'w') as tool_file:
-            template = Template(file=template_path, searchList=[general_dict])
-            tool_file.write(str(template))
+        template = Template(file=template_path, searchList=[general_dict])
+        tool_file.write(str(template))
+
 
 def map_tool(tool_meta, conf, mapping_edam):
     general_dict = build_metadata_dict(tool_meta, mapping_edam, conf)
