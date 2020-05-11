@@ -6,4 +6,5 @@ requests==2.23.0
 configparser==5.0.0
 bioblend==0.13.0
 lxml==4.5.0
+xmltodict==0.12.0
 wheel==0.34.2
