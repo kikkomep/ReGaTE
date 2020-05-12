@@ -459,20 +459,20 @@ def inputs_extract(inputs_json, mapping_edam):
         else:
             data_types = [find_edam_data(extension, mapping_edam) for extension in data_json["extensions"]]
 
-        # data_types = [find_edam_data(extension, mapping_edam) for extension in data_json["extensions"]]
-        # data_formats = [find_edam_format(extension, mapping_edam) for extension in data_json["extensions"]]
         if len(data_types) == 1:
-            data_item = {'data': data_types[0],
-                         'format': data_formats,
-                         'dataHandle': data_json['name'],
-                         'dataDescription': data_json['label']
-                         }
+            data_item = {
+                'data': data_types[0],
+                'format': data_formats,
+                'dataHandle': data_json['name'],
+                'dataDescription': data_json['label']
+            }
         else:
-            data_item = {'data': DEFAULT_EDAM_DATA,
-                         'format': data_formats,
-                         'dataHandle': data_json['name'],
-                         'dataDescription': data_json['label']
-                         }
+            data_item = {
+                'data': DEFAULT_EDAM_DATA,
+                'format': data_formats,
+                'dataHandle': data_json['name'],
+                'dataDescription': data_json['label']
+            }
         listdata.append(data_item)
 
     def inputs_extract_repeat(repeat_json):
