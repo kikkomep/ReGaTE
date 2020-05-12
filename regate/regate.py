@@ -297,7 +297,119 @@ def find_edam_data(format_name, mapping_edam):
     return edam_data
 
 
-def build_metadata_dict(tool_meta_data, mapping_edam, conf):
+def map_tool(galaxy_metadata, conf, edam_mapping):
+    """
+    Extract informations from a galaxy json tool and return the general json in the biotools format
+    :param tool_meta_data: galaxy json tool
+    :conf : regate.ini config file
+    :return: biotools dictionary
+    :rtype: dictionary
+    """
+    if galaxy_metadata['description'] != '':
+        description = format_description(galaxy_metadata['description'])
+    else:
+        description = 'Galaxy tool {0}.'.format(galaxy_metadata['description'])
+
+    mapping = {
+        ##### SUMMARY GROUP #########################################################################################
+        'name': build_tool_name(galaxy_metadata['name'], conf.prefix_toolname, conf.suffix_toolname),
+        'description': description,
+        'homepage': "{0}?tool_id={1}".format(urljoin(conf.galaxy_url, '/tool_runner'),
+                                             requests.utils.quote(galaxy_metadata['id'])),
+        'version': [galaxy_metadata['version']],
+        # TODO: check if required or auto filled on registration
+        # to obtain an uniq id in galaxy we need the toolshed repository, the owner, the xml toolid, the xml version,
+        # if the tool provide from a toolshed, if not we need the xml toolid and the xml version only
+        # The easiest : use id of the tool
+        'biotoolsID': galaxy_metadata['id'],
+        'biotoolsCURIE': 'biotools:'+galaxy_metadata['id'],
+        'otherID': [
+        ],
+
+        ##### FUNCTION GROUP ######################################################################################
+        'function': build_function_dict(galaxy_metadata, edam_mapping),
+
+        ##### LABELS GROUP ######################################################################################
+        'toolType': ["Workbench"],  # TODO: check if it is OK
+        'topic': galaxy_metadata['edam_topics'] \
+        if 'edam_topics' in galaxy_metadata and len(galaxy_metadata['edam_topics']) > 0 \
+        else [DEFAULT_EDAM_TOPIC],
+        # TODO: check if can be detected from XML configuration file
+        'operatingSystem': ['Linux'],
+        'language': [],
+        'license': '',  # TOD: check whether can be dectected inspecting the web site
+        'collectionID': [conf.resourcename],
+        'maturity': '',  # Available values: Mature, Emerging, Legacy
+        # Avaialbe values: "Free of charge", "Free of charge (with restrictions)", "Commercial"
+        'cost': '',
+        # Available values: "Open access", "Restricted access",
+        'accessibility': [conf.accessibility],
+        'ELIXIRPlatform': '',
+        'ELIXIRNode': '',
+
+        ##### Link GROUP ######################################################################################
+        # Miscellaneous links for the software: e.g., repository, issue tracker, etc.
+        # see https://biotools.readthedocs.io/en/latest/curators_guide.html#linktype for the available link types
+        'link': [
+            {
+                'type': 'Galaxy service',
+                'url': urljoin(conf.galaxy_url, galaxy_metadata['link']),
+                'note': "Run tool <b>{}</b> on the Galaxy Platform".format(galaxy_metadata['id'])
+            },
+            {
+                'type': 'Other',
+                'url': urljoin(conf.galaxy_url, "{}/{}?".format('api/tools', galaxy_metadata['id'], 'io_details=true&link_details=true')),
+                'note': "Tool metadata available on the Galaxy Platform"
+            }
+        ],
+
+        ##### Download GROUP ######################################################################################
+        'download': [
+            {
+                'type': 'Tool wrapper (galaxy)',
+                'url': urljoin(conf.galaxy_url, "{}/{}/{}".format('api/tools/', galaxy_metadata['id'], 'download')),
+                'note': "Tool name: {}. Description: {}".format(galaxy_metadata['name'], galaxy_metadata['description']),
+                'version': galaxy_metadata['version']
+            }
+        ],
+
+        ##### Documentation GROUP ######################################################################################
+        'documentation': [],
+
+        ##### Publication GROUP ######################################################################################
+        'publication': [],  # TODO: see how "/citations" works
+
+        ##### Relation GROUP ######################################################################################
+        'relation': [],  # TODO: see if it is reasonable to connect tools on platform basis
+
+        ##### Credit GROUP ######################################################################################
+        'credit': [
+            {
+                'name': conf.contactName,
+                'email': conf.contactEmail,
+                'url': conf.contactUrl,
+                'tel': conf.contactTel,
+                'typeEntity': conf.contactTypeEntity,
+                'typeRole': conf.contactTypeRole.split("."),
+                # FIXME: to be completed
+                'orcidid': '',
+                'gridid': '',
+                'note': ''
+            }
+        ],
+
+        # FIXME: to remap
+        'uses': [{
+            "usesName": 'Toolshed entry for "' + galaxy_metadata['id'] + '"',
+            "usesHomepage": 'http://' + requests.utils.quote(galaxy_metadata['id']),
+            "usesVersion": galaxy_metadata['version']
+        }]
+    }
+    result = copy.deepcopy(mapping)
+    clean_dict(result)
+    return result
+
+def map_workflow(galaxy_metadata, conf, mapping_edam):
     """
     Extract informations from a galaxy json tool and return the general json in the biotools format
     :param tool_meta_data: galaxy json tool
@@ -405,7 +517,9 @@ def build_metadata_dict(tool_meta_data, mapping_edam, conf):
             "usesVersion": tool_meta_data['version']
         }]
     }
-    return metadata
+    result = copy.deepcopy(metadata)
+    clean_dict(result)
+    return result
 
 
 def build_function_dict(json_tool, mapping_edam):
@@ -766,13 +880,6 @@ def write_xml_files(tool_name, general_dict, tool_dir, xmltemplate=None):
     with open(os.path.join(tool_dir, tool_name + ".xml"), 'w') as tool_file:
         template = Template(file=template_path, searchList=[general_dict])
         tool_file.write(str(template))
-
-
-def map_tool(tool_meta, conf, mapping_edam):
-    general_dict = build_metadata_dict(tool_meta, mapping_edam, conf)
-    cleaned_dict = copy.deepcopy(general_dict)
-    clean_dict(cleaned_dict)
-    return cleaned_dict
 
 
 def build_biotools_files(tools_metadata, conf, mapping_edam):
