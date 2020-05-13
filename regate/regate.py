@@ -544,12 +544,17 @@ def build_function_dict(json_tool, mapping_edam):
         edam_operation = [DEFAULT_EDAM_OPERATION]
     logger.debug("EDAM operation: %r -- %r -- %r", edam_operation, DEFAULT_EDAM_OPERATION, json_tool['edam_operations'])
     cmd = ""
+    note = json_tool["name"] \
+        if not json_tool["description"] \
+        else "{} ({})".format(json_tool["name"], re.sub('^[^a-zA-Z0-9_]+|[^a-zA-Z0-9]+$','', build_tool_description(json_tool)))
+    if 'config' in json_tool and json_tool['config']:
+        cmd = json_tool['config']['command'] if 'command' in json_tool['config'] else ""
     func_dict = {
         'operation': [DEFAULT_EDAM_OPERATION],
         'output': listoutps,
         'input': listinps,
-        'note': json_tool['config']['help'],
         'cmd': check_str_data_length(cmd),
+        'note': note,
     }
     list_func.append(func_dict)
     return list_func
