@@ -298,6 +298,10 @@ def find_edam_data(format_name, mapping_edam):
     return edam_data
 
 
+def build_tool_description(galaxy_metadata):
+     return format_description(galaxy_metadata['description']) if galaxy_metadata['description'] != '' \
+         else 'Galaxy tool {0}.'.format(galaxy_metadata['name'])
+
 def map_tool(galaxy_metadata, conf, edam_mapping):
     """
     Extract informations from a galaxy json tool and return the general json in the biotools format
@@ -305,16 +309,11 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
     :conf : regate.ini config file
     :return: biotools dictionary
     :rtype: dictionary
-    """
-    if galaxy_metadata['description'] != '':
-        description = format_description(galaxy_metadata['description'])
-    else:
-        description = 'Galaxy tool {0}.'.format(galaxy_metadata['description'])
-
+    """   
     mapping = {
         ##### SUMMARY GROUP #########################################################################################
         'name': build_tool_name(galaxy_metadata['name'], conf.prefix_toolname, conf.suffix_toolname),
-        'description': description,
+        'description': build_tool_description(galaxy_metadata),
         'homepage': "{0}?tool_id={1}".format(urljoin(conf.galaxy_url, '/tool_runner'),
                                              requests.utils.quote(galaxy_metadata['id'])),
         'version': [galaxy_metadata['version']],
