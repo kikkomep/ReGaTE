@@ -656,11 +656,11 @@ def outputs_extract(outputs_json, mapping_edam, biotools_inputs):
             try:
                 edam_data = {'uri': edam_to_uri(output["edam_data"], 'data')} \
                     if "edam_data" in output else find_edam_data(output['format'], mapping_edam)
-                edam_format = [{'uri': edam_to_uri(output["edam_format"], 'format')}] \
+                edam_format = {'uri': edam_to_uri(output["edam_format"], 'format')} \
                     if "edam_format" in output else find_edam_format(output['format'], mapping_edam)
                 outputdict = {
                     'data': edam_data,
-                    'format': edam_format,
+                    'format': [edam_format],
                     'dataHandle': output['format'], 'dataDescription': output['name']
                 }
             except KeyError:
