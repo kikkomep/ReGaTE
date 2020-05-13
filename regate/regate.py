@@ -522,6 +522,12 @@ def map_workflow(galaxy_metadata, conf, mapping_edam):
     return result
 
 
+def check_str_data_length(data, length=1000):
+    if not data or len(data) == 0:
+        return ""
+    return "{}...".format(data[:(length-2)]) if len(data) > length else data
+    
+
 def build_function_dict(json_tool, mapping_edam):
     """
     Extract information from a galaxy json tool and return a list of functions in the json biotools format
@@ -537,12 +543,13 @@ def build_function_dict(json_tool, mapping_edam):
     else:
         edam_operation = [DEFAULT_EDAM_OPERATION]
     logger.debug("EDAM operation: %r -- %r -- %r", edam_operation, DEFAULT_EDAM_OPERATION, json_tool['edam_operations'])
+    cmd = ""
     func_dict = {
         'operation': [DEFAULT_EDAM_OPERATION],
         'output': listoutps,
         'input': listinps,
         'note': json_tool['config']['help'],
-        'cmd': json_tool['config']['command']
+        'cmd': check_str_data_length(cmd),
     }
     list_func.append(func_dict)
     return list_func
