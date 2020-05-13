@@ -26,8 +26,7 @@ setup(
         'requests',
         'configparser',
         'bioblend',
-        'lxml',
-        'xmltodict'
+        'lxml'
     ],
     license="GPLv2",
     entry_points={

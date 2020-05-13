@@ -26,10 +26,11 @@ import requests
 import getpass
 import logging
 import tempfile
-import xmltodict
+
 import ruamel.yaml
 import collections
 import configparser
+import xml.etree.ElementTree as ET
 from lxml import etree
 from urllib.parse import urljoin
 from Cheetah.Template import Template
@@ -712,8 +713,13 @@ def get_galaxy_tool_wrapper_config_file(tool_id, config):
                 logger.warn("Unable to detect the wrapper config file: more than one XML file found!")
                 return None
             tar_archive.extractall(path=temp_dir.name)
-            with open(os.path.join(temp_dir.name, files[0])) as file:
-                return xmltodict.parse(file.read())['tool']
+            xml_filename = os.path.join(temp_dir.name, files[0])
+            xml_config = ET.parse(xml_filename)
+            root = xml_config.getroot()
+            return {
+                'command': root.find("command").text,
+                'help': root.find("help").text,
+            }            
     finally:
         temp.close()
         temp_dir.cleanup()
