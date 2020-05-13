@@ -220,7 +220,7 @@ def build_filename(tool_id, version):
             source = str.split(tool_id, '/')[-2]
         except IndexError:
             source = tool_id
-        return source + "_" + version
+        return source + "_" + str(version)
     except ValueError:
         logger.warning("ValueError:", tool_id)
         return ""
