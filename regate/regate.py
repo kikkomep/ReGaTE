@@ -708,7 +708,7 @@ def build_edam_dict(yaml_file):
     return map_edam
 
 
-def get_galaxy_tool_wrapper_config_file(tool_id, config):
+def get_galaxy_tool_wrapper_config(tool_id, config):
     temp = tempfile.NamedTemporaryFile()
     temp_dir = tempfile.TemporaryDirectory()
     try:
