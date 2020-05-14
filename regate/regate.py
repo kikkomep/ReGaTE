@@ -92,7 +92,7 @@ class Config(object):
     class config to parse and check the config.ini file
     """
 
-    def __init__(self, configfile, script):
+    def __init__(self, configfile, script, options):
         self.conf = config_parser(configfile)
         self.galaxy_url_api = self.assign("galaxy_server", "galaxy_url_api", ismandatory=True)
         self.api_key = self.assign("galaxy_server", "api_key", ismandatory=True)
@@ -106,39 +106,27 @@ class Config(object):
             self.contactTypeEntity = self.assign("galaxy_server", "contactTypeEntity", ismandatory=True)
             self.contactTypeRole = self.assign("galaxy_server", "contactTypeRole", ismandatory=True)
             self.resourcename = self.assign("galaxy_server", "resourcename", ismandatory=True)
-            self.onlypush = self.assign("regate_specific_section", "onlypush", ismandatory=False, boolean=True)
             self.prefix_toolname = self.assign("regate_specific_section", "prefix_toolname", ismandatory=False)
             self.suffix_toolname = self.assign("regate_specific_section", "suffix_toolname", ismandatory=False)
-
-            if self.onlypush:
-                self.pushtoelixir = self.assign("regate_specific_section", "pushtoelixir", ismandatory=True,
-                                                message="pushtoelixir option is mandatory if onlypush is True",
-                                                boolean=True)
-                if not self.pushtoelixir:
-                    raise KeyError("pushtoelixir option must be True if onlypush is True")
-
-            else:
-                self.pushtoelixir = self.assign("regate_specific_section", "pushtoelixir", ismandatory=False,
-                                                boolean=True)
-            if self.pushtoelixir:
-                self.login = self.assign("regate_specific_section", "login", ismandatory=True,
-                                         message="login option is mandatory if pushtoelixir is True")
-                self.host = self.assign("regate_specific_section", "bioregistry_host", ismandatory=True,
-                                        message="bioregistry_host option is mandatory if pushtoelixir is True")
-                self.ssl_verify = self.assign("regate_specific_section", "ssl_verify", ismandatory=True,
-                                              message="ssl_verify option is mandatory if pushtoelixir is True",
-                                              boolean=True)
-                self.accessibility = self.assign("regate_specific_section", "accessibility", ismandatory=True,
-                                                 message="accessibility option is mandatory if pushtoelixir is True")
-            else:
-                self.login = self.assign("regate_specific_section", "login", ismandatory=False)
-                self.host = self.assign("regate_specific_section", "bioregistry_host", ismandatory=False)
-                self.ssl_verify = self.assign("regate_specific_section", "ssl_verify", ismandatory=False, boolean=True)
             self.accessibility = self.assign("regate_specific_section", "accessibility", ismandatory=True)
+            self.data_uri_prefix = self.assign("regate_specific_section", "data_uri_prefix", ismandatory=True)
             self.tool_dir = self.assign("regate_specific_section", "tool_dir", ismandatory=True)
             self.yaml_file = self.assign("regate_specific_section", "yaml_file", ismandatory=False)
             self.xmltemplate = self.assign("regate_specific_section", "xmltemplate", ismandatory=False)
             self.xsdbiotools = self.assign("regate_specific_section", "xsdbiotools", ismandatory=False)
+            if options.no_push:
+                self.login = self.assign("regate_specific_section", "login", ismandatory=False)
+                self.host = self.assign("regate_specific_section", "bioregistry_host", ismandatory=False)
+                self.ssl_verify = self.assign("regate_specific_section", "ssl_verify", ismandatory=False, boolean=True)
+            else:
+                self.login = self.assign("regate_specific_section", "login", ismandatory=True,
+                                         message="login option is mandatory to push resources to Elixir")
+                self.host = self.assign("regate_specific_section", "bioregistry_host", ismandatory=True,
+                                        message="bioregistry_host option is mandatory to push resources to Elixir")
+                self.ssl_verify = self.assign("regate_specific_section", "ssl_verify", ismandatory=True,
+                                              message="ssl_verify option is mandatory to push resources to Elixir", boolean=True)
+                self.accessibility = self.assign("regate_specific_section", "accessibility", ismandatory=True,
+                                                 message="accessibility option is mandatory to push resources to Elixir")
         if script == "remag":
             self.edam_file = self.assign("remag_specific_section", "edam_file", ismandatory=True)
             self.output_yaml = self.assign("remag_specific_section", "output_yaml", ismandatory=True)
@@ -961,8 +949,8 @@ def run():
     if not args.templateconfig:
         if not os.path.exists(args.config_file):
             raise IOError("{0} doesn't exist".format(args.config_file))
-        config = Config(args.config_file, "regate")
-        if not config.onlypush:
+        config = Config(args.config_file, "regate", args)
+        if not config.push_only and not args.push_only:
             gi = GalaxyInstance(config.galaxy_url_api, key=config.api_key)
             gi.verify = False
             try:
