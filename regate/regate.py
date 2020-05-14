@@ -941,14 +941,14 @@ def build_biotools_files(conf, mapping_edam, galaxy_tools_metadata=[], galaxy_wo
     :param tools_metadata:
     :return:
     """
+    # setup tools paths
     base_dir = conf.tool_dir
     tools_dir = os.path.join(base_dir, "tools")
     workflows_dir = os.path.join(base_dir, "workflows")
-    if os.path.exists(base_dir):
-        shutil.rmtree(base_dir)
-    os.mkdir(base_dir)
-    os.mkdir(tools_dir)
-    os.mkdir(workflows_dir)
+    if not os.path.exists(tools_dir):
+        os.makedirs(tools_dir)
+    if not os.path.exists(workflows_dir):
+        os.makedirs(workflows_dir)
 
     # write tools
     for galaxy_tool_metadata in galaxy_tools_metadata:
