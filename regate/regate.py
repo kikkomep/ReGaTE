@@ -430,7 +430,6 @@ def map_workflow_tools(galaxy_metadata, config, mapping_edam):
     for step_index, step in galaxy_metadata["steps"].items():
         if step['type'] == 'tool':
             galaxy_tool_metadata = gi.tools.show_tool(step['tool_id'], link_details=True, io_details=True)
-            print(galaxy_tool_metadata)
             try:
                 galaxy_tool_metadata['config'] = get_galaxy_tool_wrapper_config(galaxy_tool_metadata['id'], config)
             except Exception as e:
@@ -1070,7 +1069,6 @@ def run():
                     # Retrieve all available tools in the Galaxy platform
                     try:
                         galaxy_workflows = gi.workflows.get_workflows()
-                        print(galaxy_workflows)
                         # Ensure the list doesn't contain diplicates checking ID and version
                         # detect_toolid_duplicate(galaxy_workflows)
                     except ConnectionError as e:
@@ -1101,8 +1099,6 @@ def run():
         if args.resource == "all" or args.resource == "workflows":
             biotools_json_files.extend([f for f in glob.glob(os.path.join(workflows_dir, "*.json")) if os.path.isfile(f)])
         
-        print(glob.glob(os.path.join(workflows_dir, "*.json")))
-        print(biotools_json_files)
         if len(biotools_json_files) == 0:
             print("No file to publish on the ELIXIR registry '{}'".format(config.host))
         elif not args.no_push:
