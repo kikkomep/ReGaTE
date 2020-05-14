@@ -397,6 +397,22 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
     clean_dict(result)
     return result
 
+
+def map_workflow_tools(galaxy_metadata, config, mapping_edam):
+    tools = {}
+    gi = GalaxyInstance(config.galaxy_url_api, key=config.api_key)
+    for step_index, step in galaxy_metadata["steps"].items():
+        if step['type'] == 'tool':
+            galaxy_tool_metadata = gi.tools.show_tool(step['tool_id'], link_details=True, io_details=True)
+            print(galaxy_tool_metadata)
+            try:
+                galaxy_tool_metadata['config'] = get_galaxy_tool_wrapper_config(galaxy_tool_metadata['id'], config)
+            except Exception as e:
+                logger.warn("Unable to download tool: %r", step['tool_id'])
+            tools[step['tool_id']] = map_tool(galaxy_tool_metadata, config, mapping_edam)
+    return tools
+
+
 def map_workflow(galaxy_metadata, conf, mapping_edam):
     """
     Extract informations from a galaxy json tool and return the general json in the biotools format
@@ -405,35 +421,32 @@ def map_workflow(galaxy_metadata, conf, mapping_edam):
     :return: biotools dictionary
     :rtype: dictionary
     """
-    if tool_meta_data['description'] != '':
-        description = format_description(tool_meta_data['description'])
-    else:
-        description = 'Galaxy tool {0}.'.format(tool_meta_data['description'])
-
-    metadata = {
+    tools = map_workflow_tools(galaxy_metadata, conf, mapping_edam)
+    topics = {topic['uri']: topic for t in tools.values() for topic in t['topic']}
+    operations = [op for t in tools.values() for op in t['function']]
+    name = build_tool_name(galaxy_metadata['name'], conf.prefix_toolname, conf.suffix_toolname)
+    mapping = {
         ##### SUMMARY GROUP #########################################################################################
-        'name': build_tool_name(tool_meta_data['name'], conf.prefix_toolname, conf.suffix_toolname),
-        'description': description,
-        'homepage': "{0}?tool_id={1}".format(urljoin(conf.galaxy_url, '/tool_runner'),
-                                             requests.utils.quote(tool_meta_data['id'])),
-        'version': [tool_meta_data['version']],
+        'name': build_tool_name(name, conf.prefix_toolname, conf.suffix_toolname),
+        # FIXME: define a default description if annotation is None
+        'description': "workflow description: " + galaxy_metadata['annotation'],
+        'homepage': "{}?id={}".format(urljoin(conf.galaxy_url, '/workflow/display_by_id'), galaxy_metadata['uuid']),
+        'version': [str(galaxy_metadata['version'])],
         # TODO: check if required or auto filled on registration
         # to obtain an uniq id in galaxy we need the toolshed repository, the owner, the xml toolid, the xml version,
         # if the tool provide from a toolshed, if not we need the xml toolid and the xml version only
         # The easiest : use id of the tool
-        'biotoolsID': tool_meta_data['id'],
-        'biotoolsCURIE': 'biotools:'+tool_meta_data['id'],
+        'biotoolsID': galaxy_metadata['uuid'],
+        'biotoolsCURIE': 'biotools:{}'.format(galaxy_metadata['uuid']),
         'otherID': [
         ],
 
         ##### FUNCTION GROUP ######################################################################################
-        'function': build_function_dict(tool_meta_data, mapping_edam),
+        'function': operations,
 
         ##### LABELS GROUP ######################################################################################
-        'toolType': ["Workbench"],  # TODO: check if it is OK
-        'topic': tool_meta_data['edam_topics'] \
-        if 'edam_topics' in tool_meta_data and len(tool_meta_data['edam_topics']) > 0 \
-        else [DEFAULT_EDAM_TOPIC],
+        'toolType': ["Workflow"],
+        'topic': [t for t in topics.values()],
         # TODO: check if can be detected from XML configuration file
         'operatingSystem': ['Linux'],
         'language': [],
@@ -453,13 +466,8 @@ def map_workflow(galaxy_metadata, conf, mapping_edam):
         'link': [
             {
                 'type': 'Galaxy service',
-                'url': urljoin(conf.galaxy_url, tool_meta_data['link']),
-                'note': "Run tool <b>{}</b> on the Galaxy Platform".format(tool_meta_data['id'])
-            },
-            {
-                'type': 'Other',
-                'url': urljoin(conf.galaxy_url, "{}/{}?".format('api/tools', tool_meta_data['id'], 'io_details=true&link_details=true')),
-                'note': "Tool metadata available on the Galaxy Platform"
+                'url': "{}?id={}".format(urljoin(conf.galaxy_url, '/workflow/display_by_id'), galaxy_metadata['uuid']),
+                'note': 'View and run the workflow "{}" on the Galaxy Platform'.format(galaxy_metadata['name'])
             }
         ],
 
@@ -467,9 +475,10 @@ def map_workflow(galaxy_metadata, conf, mapping_edam):
         'download': [
             {
                 'type': 'Tool wrapper (galaxy)',
-                'url': urljoin(conf.galaxy_url, "{}/{}/{}".format('api/tools/', tool_meta_data['id'], 'download')),
-                'note': "Tool name: {}. Description: {}".format(tool_meta_data['name'], tool_meta_data['description']),
-                'version': tool_meta_data['version']
+                'url': urljoin(conf.galaxy_url, "{}/{}/download?format=json-download".format('api/workflows/', galaxy_metadata['uuid'])),
+                'note': build_description_note(galaxy_metadata) + "[provided by Galaxy Platform]",  # FIXME: check string
+                'version': galaxy_metadata['version']
+            },
             }
         ],
 
@@ -496,16 +505,9 @@ def map_workflow(galaxy_metadata, conf, mapping_edam):
                 'gridid': '',
                 'note': ''
             }
-        ],
-
-        # FIXME: to remap
-        'uses': [{
-            "usesName": 'Toolshed entry for "' + tool_meta_data['id'] + '"',
-            "usesHomepage": 'http://' + requests.utils.quote(tool_meta_data['id']),
-            "usesVersion": tool_meta_data['version']
-        }]
+        ]
     }
-    result = copy.deepcopy(metadata)
+    result = copy.deepcopy(mapping)
     clean_dict(result)
     return result
 
