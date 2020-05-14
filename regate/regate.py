@@ -773,6 +773,13 @@ def get_galaxy_tool_wrapper_config(tool_id, config):
         temp_dir.cleanup()
 
 
+def _build_request_headers(token=None):
+    if token:
+        return {'Accept': 'application/json', 'Content-type': 'application/json',
+                'Authorization': 'Token {0}'.format(token)}
+    return {'Accept': 'application/json', 'Content-type': 'application/json'}
+
+
 def auth(login, host, ssl_verify):
     """
     :param login:
@@ -783,10 +790,35 @@ def auth(login, host, ssl_verify):
         password = getpass.getpass()
         url = host + '/api/rest-auth/login/'
         resp = requests.post(url, '{{"username": "{0}","password": "{1}"}}'.format(login, password),
-                             headers={'Accept': 'application/json', 'Content-type': 'application/json'},
-                             verify=ssl_verify)
+                             headers=_build_request_headers(), verify=ssl_verify)
         key = resp.json().get('key')
     return key
+
+
+def remove_existing_elixir_tool_version(registry_url, token, tool_id, tool_version, tool_collectionID):
+    try:
+        # try first with version number
+        res_url = urljoin(registry_url, '/api/tool/{0}/version/{1}'.format(tool_id, tool_version))
+        resp = requests.get(res_url, headers=_build_request_headers(token))
+        if resp.status_code != 200:
+            # try without version number
+            res_url = urljoin(registry_url, '/api/tool/{0}'.format(tool_id))
+            resp = requests.get(res_url, headers=_build_request_headers(token))
+        # finally check if a result has been found
+        if resp.status_code == 200:
+            biotool = resp.json()
+            logger.debug('{0} in {1}: {2}'.format(tool_collectionID, biotool.get(
+                'collectionID', []), tool_collectionID in biotool.get('collectionID', [])))
+            if tool_collectionID in biotool.get('collectionID', []):
+                logger.debug("removing resource " + tool_id)
+                resp = requests.delete(
+                    res_url, headers=_build_request_headers(token))
+                if resp.status_code == 204:
+                    logger.debug("{0} ok".format(tool_id))
+                else:
+                    logger.error("{0} ko, error: {1} {2} (code: {3})".format(tool_id, resp.text, resp.status_code))
+    except Exception:
+        logger.error("Error removing resource {0}".format(tool_id), exc_info=True)
 
 
 def push_to_elix(login, host, ssl_verify, biotools_json_files, resourcename, xsd=None):
@@ -795,53 +827,21 @@ def push_to_elix(login, host, ssl_verify, biotools_json_files, resourcename, xsd
     :param tool_dir:
     :return:
     """
+    ok_cnt = 0
+    ko_cnt = 0
+
+    # Get Auth Token
     logger.debug("authenticating...")
     token = auth(login, host, ssl_verify)
     logger.debug("authentication ok")
-    ok_cnt = 0
-    ko_cnt = 0
-    logger.debug("attempting to retrieve registered services...")
-    resp = requests.get(host + '/api/rest-auth/user/',
-                        headers={'Accept': 'application/json', 'Content-type': 'application/json',
-                                 'Authorization': 'Token {0}'.format(token)})
-    resources = resp.json().get('resources')
-    logger.debug("attempting to delete all registered services in collection {0}...".format(resourcename))
-    for resource in resources:
-        try:
-            # FIXME added /version/none because not specifying it currently raises an error on dev.bio.tools :(
-            resource_version = resource['version'][0] if 'version' in resource and len(
-                resource['version']) > 0 else 'none'
-            logger.debug("checking resource {0}...".format(resource['id']))
-            res_url = urljoin(host,
-                              '/api/tool/{0}/version/{1}'.format(resource['id'], resource_version))
-            resp = requests.get(res_url, headers={'Accept': 'application/json', 'Content-type': 'application/json',
-                                                  'Authorization': 'Token {0}'.format(token)})
-            if resp.status_code != 200:
-                res_url = urljoin(host, '/api/tool/{0}'.format(resource['id']))
-                resp = requests.get(res_url, headers={'Accept': 'application/json', 'Content-type': 'application/json',
-                                                      'Authorization': 'Token {0}'.format(token)})
-            res_full = resp.json()
-            logger.debug('{0} in {1}: {2}'.format(resourcename, res_full.get(
-                'collectionID', []), resourcename in res_full.get('collectionID', [])))
-            if resourcename in res_full.get('collectionID', []):
-                logger.debug("removing resource " + resource['id'])
-                resp = requests.delete(
-                    res_url, headers={'Accept': 'application/json', 'Content-type': 'application/json',
-                                      'Authorization': 'Token {0}'.format(token)})
-                if resp.status_code == 204:
-                    logger.debug("{0} ok".format(resource['id']))
-                else:
-                    logger.error("{0} ko, error: {1} {2} (code: {3})".format(
-                        resource['id'], resp.text, resp.status_code))
-        except Exception:
-            logger.error("Error removing resource {0}".format(resource['id']), exc_info=True)
-    logger.debug("loading json")
+    # POST BioTool JSON files
     for jsonfile in biotools_json_files:
         json_string = open(jsonfile, 'r').read()
+        json_data = json.loads(json_string)
+        # TODO: replace removal with a proper upgrade
+        remove_existing_elixir_tool_version(host, token, json_data['biotoolsID'], json_data['version'][0], resourcename)
         url = host + "/api/tool"
-        resp = requests.post(url, json_string,
-                             headers={'Accept': 'application/json', 'Content-type': 'application/json',
-                                      'Authorization': 'Token {0}'.format(token)}, verify=ssl_verify)
+        resp = requests.post(url, json_string, headers=_build_request_headers(token), verify=ssl_verify)
         if resp.status_code == 201:
             logger.debug("{0} ok".format(os.path.basename(jsonfile)))
             ok_cnt += 1
