@@ -903,28 +903,35 @@ def write_xml_files(tool_name, general_dict, tool_dir, xmltemplate=None):
         tool_file.write(str(template))
 
 
-def build_biotools_files(tools_metadata, conf, mapping_edam):
+def build_biotools_files(conf, mapping_edam, galaxy_tools_metadata=[], galaxy_workflows_metadata=[]):
     """
     :param tools_metadata:
     :return:
     """
-    tool_dir = conf.tool_dir
-    if os.path.exists(tool_dir):
-        shutil.rmtree(tool_dir)
-    os.mkdir(tool_dir)
+    base_dir = conf.tool_dir
+    tools_dir = os.path.join(base_dir, "tools")
+    workflows_dir = os.path.join(base_dir, "workflows")
+    if os.path.exists(base_dir):
+        shutil.rmtree(base_dir)
+    os.mkdir(base_dir)
+    os.mkdir(tools_dir)
+    os.mkdir(workflows_dir)
 
-    for tool_meta in tools_metadata:
-        general_dict = map_tool(tool_meta, conf, mapping_edam)
-        file_name = build_filename(tool_meta['id'], tool_meta['version'])
-        write_json_files(file_name, general_dict, tool_dir)
-        with open(tool_dir+'/'+file_name+'.yml', 'w') as outfile:
-            ruamel.yaml.safe_dump(tool_meta, outfile)
-        # do not write XML files because they require source registry to be specified
-        # if conf.xmltemplate:
-        #    write_xml_files(file_name, general_dict, tool_dir,
-        #                    xmltemplate=conf.xmltemplate)
-        # else:
-        #    write_xml_files(file_name, general_dict, tool_dir)
+    # write tools
+    for galaxy_tool_metadata in galaxy_tools_metadata:
+        biotools_metadata = map_tool(galaxy_tool_metadata, conf, mapping_edam)
+        file_name = build_filename(galaxy_tool_metadata['id'], galaxy_tool_metadata['version'])
+        write_json_files(file_name, biotools_metadata, tools_dir)
+        with open(os.path.join(tools_dir, "{}.yaml".format(file_name)), 'w') as outfile:
+            ruamel.yaml.safe_dump(biotools_metadata, outfile)
+    
+    # write workflows
+    for galaxy_workflow_metadata in galaxy_workflows_metadata:
+        biotools_metadata = map_workflow(galaxy_workflow_metadata, conf, mapping_edam)
+        file_name = build_filename(galaxy_workflow_metadata['uuid'], galaxy_workflow_metadata['version'])
+        write_json_files(file_name, biotools_metadata, workflows_dir)
+        with open(os.path.join(workflows_dir, "{}.yaml".format(file_name)), 'w') as outfile:
+            ruamel.yaml.safe_dump(biotools_metadata, outfile)
 
 
 def generate_template():
