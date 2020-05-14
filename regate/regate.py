@@ -287,8 +287,9 @@ def find_edam_data(format_name, mapping_edam):
 
 
 def build_tool_description(galaxy_metadata):
-     return format_description(galaxy_metadata['description']) if galaxy_metadata['description'] != '' \
-         else 'Galaxy tool {0}.'.format(galaxy_metadata['name'])
+    return format_description(galaxy_metadata['description']) if galaxy_metadata['description'] != '' \
+        else 'Galaxy tool {0}.'.format(galaxy_metadata['name'])
+
 
 def map_tool(galaxy_metadata, conf, edam_mapping):
     """
@@ -297,7 +298,8 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
     :conf : regate.ini config file
     :return: biotools dictionary
     :rtype: dictionary
-    """   
+    """
+    tool_id = build_tool_name(galaxy_metadata['id'], conf.prefix_toolname, conf.suffix_toolname)
     mapping = {
         ##### SUMMARY GROUP #########################################################################################
         'name': build_tool_name(galaxy_metadata['name'], conf.prefix_toolname, conf.suffix_toolname),
@@ -309,8 +311,8 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
         # to obtain an uniq id in galaxy we need the toolshed repository, the owner, the xml toolid, the xml version,
         # if the tool provide from a toolshed, if not we need the xml toolid and the xml version only
         # The easiest : use id of the tool
-        'biotoolsID': galaxy_metadata['id'],
-        'biotoolsCURIE': 'biotools:'+galaxy_metadata['id'],
+        'biotoolsID': tool_id,
+        'biotoolsCURIE': 'biotools:{}'.format(tool_id),
         'otherID': [
         ],
 
@@ -342,7 +344,7 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
             {
                 'type': 'Galaxy service',
                 'url': urljoin(conf.galaxy_url, galaxy_metadata['link']),
-                'note': "Run tool <b>{}</b> on the Galaxy Platform".format(galaxy_metadata['id'])
+                'note': 'Run the "{}" tool on a Galaxy Platform'.format(galaxy_metadata['id'])
             },
             {
                 'type': 'Other',
