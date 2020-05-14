@@ -50,7 +50,7 @@ file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
 stream_handler = logging.StreamHandler()
-stream_handler.setLevel(logging.INFO)
+stream_handler.setLevel(logging.DEBUG)
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
@@ -957,7 +957,7 @@ def build_biotools_files(conf, mapping_edam, galaxy_tools_metadata=[], galaxy_wo
         write_json_files(file_name, biotools_metadata, tools_dir)
         with open(os.path.join(tools_dir, "{}.yaml".format(file_name)), 'w') as outfile:
             ruamel.yaml.safe_dump(biotools_metadata, outfile)
-    
+
     # write workflows
     for galaxy_workflow_metadata in galaxy_workflows_metadata:
         biotools_metadata = map_workflow(galaxy_workflow_metadata, conf, mapping_edam)
@@ -994,23 +994,20 @@ def run():
     parser = argparse.ArgumentParser(description="Galaxy instance tool parsing, for integration in biotools/bioregistry")
     parser.set_defaults(resource='all')
     parser.add_argument("--config_file", help="config.ini file for regate or remag")
-    
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--no-push", action='store_true', help="do not push Galaxy resources on ELIXIR Bio.Tools")
     group.add_argument("--push-only", action='store_true', help="push on ELIXIR Bio.Tools only Galaxy resources already converted")
-    
     sp = parser.add_subparsers(help='commands')
     sp0 = sp.add_parser("template", help="generate a config_file template")
     sp0.set_defaults(resource='template')
-    
     sp1 = sp.add_parser("tools", help="convert and/or push only Galaxy tools")
     sp1.set_defaults(resource='tools')
     sp1.add_argument("--filter", help="list of comma separated IDs of galaxy tools")
     sp2 = sp.add_parser("workflows", help="convert and/or push only Galaxy workflows")
     sp2.set_defaults(resource='workflows')
     sp2.add_argument("--filter", help="list of comma separated IDs of galaxy workflows")
-        
-    # FIXME: 
+
+    # FIXME:
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
@@ -1024,7 +1021,7 @@ def run():
         if not args.push_only:
             gi = GalaxyInstance(config.galaxy_url_api, key=config.api_key)
             gi.verify = False
-            
+
             # Load EDAM mapping
             if config.yaml_file:
                 edam_dict = build_edam_dict(config.yaml_file)
@@ -1036,7 +1033,7 @@ def run():
             if args.resource == "all" or args.resource == "tools":
                 galaxy_tools = None
                 if args.filter:
-                    galaxy_tools = [{'id' : tool_id } for tool_id in args.filter.split(",")]
+                    galaxy_tools = [{'id': tool_id} for tool_id in args.filter.split(",")]
                 else:
                     # Retrieve all available tools in the Galaxy platform
                     try:
@@ -1045,7 +1042,7 @@ def run():
                         detect_toolid_duplicate(galaxy_tools)
                     except ConnectionError as e:
                         raise ConnectionError("Connection with the Galaxy server {0} failed, {1}".format(config.galaxy_url_api, e))
-                
+
                 if galaxy_tools:
                     # Load list of tools to be ignored
                     default_tools = config.tools_default.split(',')
@@ -1057,15 +1054,16 @@ def run():
                                 metadata['config'] = get_galaxy_tool_wrapper_config(metadata['id'], config)
                                 tools_metadata.append(metadata)
                             except ConnectionError as e:
-                                logger.error("Error during connection with exposed API method for tool {0}".format(str(tool['id'])), exc_info=True)
+                                logger.error("Error during connection with exposed API method for tool {0}".format(
+                                    str(tool['id'])), exc_info=True)
 
             ### WORKFLOWs ###################################################################################
             workflows_metadata = []
-            if args.resource == "all" or args.resource == "workflows":             
+            if args.resource == "all" or args.resource == "workflows":
                 galaxy_workflows = None
                 if args.filter:
-                    galaxy_workflows = [{'id' : tool_id } for tool_id in args.filter.split(",")]
-                else:                    
+                    galaxy_workflows = [{'id': tool_id} for tool_id in args.filter.split(",")]
+                else:
                     # Retrieve all available tools in the Galaxy platform
                     try:
                         galaxy_workflows = gi.workflows.get_workflows()
@@ -1073,32 +1071,33 @@ def run():
                         # detect_toolid_duplicate(galaxy_workflows)
                     except ConnectionError as e:
                         raise ConnectionError("Connection with the Galaxy server {0} failed, {1}".format(config.galaxy_url_api, e))
-                
+
                 # Load workdlows details
                 if galaxy_workflows:
-                    for wf in galaxy_workflows:                    
+                    for wf in galaxy_workflows:
                         try:
                             metadata = gi.workflows.export_workflow_dict(wf['id'])
                             workflows_metadata.append(metadata)
                         except ConnectionError as e:
-                            logger.error("Error during connection with exposed API method for workflow {0}".format(str(wf['id'])), exc_info=True)
+                            logger.error("Error during connection with exposed API method for workflow {0}".format(
+                                str(wf['id'])), exc_info=True)
 
             # Generate BioTools files for both tools and workflows
-            build_biotools_files(config, edam_dict, 
-                                 galaxy_tools_metadata=tools_metadata, 
+            build_biotools_files(config, edam_dict,
+                                 galaxy_tools_metadata=tools_metadata,
                                  galaxy_workflows_metadata=workflows_metadata)
 
         # Build list of BioTools JSON files to publish
         biotools_json_files = []
- 
+
         tools_dir = os.path.join(config.tool_dir, "tools")
         if args.resource == "all" or args.resource == "tools":
-             biotools_json_files.extend([f for f in glob.glob(os.path.join(tools_dir, "*.json")) if os.path.isfile(f)])
- 
+            biotools_json_files.extend([f for f in glob.glob(os.path.join(tools_dir, "*.json")) if os.path.isfile(f)])
+
         workflows_dir = os.path.join(config.tool_dir, "workflows")
         if args.resource == "all" or args.resource == "workflows":
             biotools_json_files.extend([f for f in glob.glob(os.path.join(workflows_dir, "*.json")) if os.path.isfile(f)])
-        
+
         if len(biotools_json_files) == 0:
             print("No file to publish on the ELIXIR registry '{}'".format(config.host))
         elif not args.no_push:
