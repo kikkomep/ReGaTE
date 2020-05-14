@@ -31,6 +31,7 @@ import collections
 import configparser
 import xml.etree.ElementTree as ET
 from lxml import etree
+from datauri import DataURI
 from urllib.parse import urljoin
 from Cheetah.Template import Template
 from bioblend.galaxy.client import ConnectionError
@@ -289,6 +290,16 @@ def build_tool_description(galaxy_metadata):
         else 'Galaxy tool {0}.'.format(galaxy_metadata['name'])
 
 
+def build_download_link(config, data, filename="data", mimetype="application/json", charset='utf-8'):
+    return "{}?{}".format(
+        config.data_uri_prefix,
+        urllib.parse.urlencode({
+            'filename': filename,
+            'data': DataURI.make(mimetype, charset=charset, base64=True, data=data)
+        })
+    )
+
+
 def map_tool(galaxy_metadata, conf, edam_mapping):
     """
     Extract informations from a galaxy json tool and return the general json in the biotools format
@@ -393,6 +404,21 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
             "usesVersion": galaxy_metadata['version']
         }]
     }
+
+    tool_archive = get_galaxy_tool_wrapper_archive(galaxy_metadata['id'], conf)
+    if tool_archive:
+        mapping['download'].append(
+            {
+                'type': 'Tool wrapper (galaxy)',
+                'url': build_download_link(conf, tool_archive,
+                                           filename="{}.tar.gz".format(tool_id),
+                                           mimetype="application/tar+gzip"),
+                'note': "Galaxy Tool tar.gz archive encoded as base64 dataURI on the 'data' URL parameter.",
+                'version': galaxy_metadata['version']
+
+            }
+        )
+
     result = copy.deepcopy(mapping)
     clean_dict(result)
     return result
@@ -479,6 +505,14 @@ def map_workflow(galaxy_metadata, conf, mapping_edam):
                 'note': build_description_note(galaxy_metadata) + "[provided by Galaxy Platform]",  # FIXME: check string
                 'version': galaxy_metadata['version']
             },
+            {
+                'type': 'Tool wrapper (galaxy)',
+                'url': build_download_link(conf, json.dumps(galaxy_metadata),
+                                           filename="{}.json".format(galaxy_metadata['uuid']),
+                                           mimetype="application/json"),
+                'note': "Galaxy Workflow definition as base64 encoded data URI on the 'data' URL parameter.",
+                'version': galaxy_metadata['version']
+
             }
         ],
 
