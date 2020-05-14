@@ -514,7 +514,13 @@ def check_str_data_length(data, length=1000):
     if not data or len(data) == 0:
         return ""
     return "{}...".format(data[:(length-2)]) if len(data) > length else data
-    
+
+
+def build_description_note(galaxy_metadata):
+    return "{} ({})".format(galaxy_metadata["name"], re.sub('^[^a-zA-Z0-9_]+|[^a-zA-Z0-9]+$', '', build_tool_description(galaxy_metadata))) \
+        if "description" in galaxy_metadata and galaxy_metadata["description"] \
+        else galaxy_metadata["name"]
+
 
 def build_function_dict(json_tool, mapping_edam):
     """
@@ -532,9 +538,7 @@ def build_function_dict(json_tool, mapping_edam):
         edam_operation = [DEFAULT_EDAM_OPERATION]
     logger.debug("EDAM operation: %r -- %r -- %r", edam_operation, DEFAULT_EDAM_OPERATION, json_tool['edam_operations'])
     cmd = ""
-    note = json_tool["name"] \
-        if not json_tool["description"] \
-        else "{} ({})".format(json_tool["name"], re.sub('^[^a-zA-Z0-9_]+|[^a-zA-Z0-9]+$','', build_tool_description(json_tool)))
+    note = build_description_note(json_tool)
     if 'config' in json_tool and json_tool['config']:
         cmd = json_tool['config']['command'] if 'command' in json_tool['config'] else ""
     func_dict = {
