@@ -700,16 +700,26 @@ def build_edam_dict(yaml_file):
     return map_edam
 
 
-def get_galaxy_tool_wrapper_config(tool_id, config):
-    temp = tempfile.NamedTemporaryFile()
-    temp_dir = tempfile.TemporaryDirectory()
+def get_galaxy_tool_wrapper_archive(tool_id, config):
     try:
         gi = GalaxyInstance(config.galaxy_url_api, key=config.api_key)
         tool_url = '{}/{}/download'.format(gi.tools.url, tool_id)
         r = gi.tools._get(url=tool_url, json=False)
         if r.status_code == 200:
+            return r.content
+    except Exception as e:
+        logger.exception(e)
+    return None
+
+
+def get_galaxy_tool_wrapper_config(tool_id, config):
+    temp = tempfile.NamedTemporaryFile()
+    temp_dir = tempfile.TemporaryDirectory()
+    try:
+        archive = get_galaxy_tool_wrapper_archive(tool_id, config)
+        if archive:
             with open(temp.name, "wb") as out:
-                out.write(r.content)
+                out.write(archive)
             tar_archive = tarfile.open(temp.name, 'r:gz')
             files = [f for f in tar_archive.getnames() if f.endswith('xml')]
             if len(files) > 1:
@@ -722,7 +732,7 @@ def get_galaxy_tool_wrapper_config(tool_id, config):
             return {
                 'command': root.find("command").text,
                 'help': root.find("help").text,
-            }            
+            }
     finally:
         temp.close()
         temp_dir.cleanup()
