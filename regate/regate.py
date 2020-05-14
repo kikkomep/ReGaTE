@@ -21,12 +21,11 @@ import shutil
 import string
 import urllib
 import tarfile
-import argparse
-import requests
 import getpass
 import logging
+import argparse
+import requests
 import tempfile
-
 import ruamel.yaml
 import collections
 import configparser
@@ -36,7 +35,6 @@ from urllib.parse import urljoin
 from Cheetah.Template import Template
 from bioblend.galaxy.client import ConnectionError
 from bioblend.galaxy import GalaxyInstance
-
 from logging.handlers import RotatingFileHandler
 
 logger = logging.getLogger()
