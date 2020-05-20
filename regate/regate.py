@@ -1043,6 +1043,10 @@ def write_xml_files(tool_name, general_dict, tool_dir, xmltemplate=None):
 
 
 def build_biotools_files(conf, mapping_edam, galaxy_tools_metadata=[], galaxy_workflows_metadata=[]):
+def get_resource_folder(conf, platform, type):
+    base_dir = conf.tool_dir
+    return "{}{}".format(os.path.join(base_dir, platform, type),'s')
+
     """
     :param tools_metadata:
     :return:
