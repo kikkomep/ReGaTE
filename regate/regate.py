@@ -29,6 +29,7 @@ import tempfile
 import ruamel.yaml
 import collections
 import configparser
+from enum import Enum
 import xml.etree.ElementTree as ET
 from lxml import etree
 from datauri import DataURI
@@ -78,6 +79,25 @@ DEFAULT_EDAM_TOPIC = {
     "term": "Topic"
 }
 
+
+class _ALLOWED_SOURCES (Enum):
+    GALAXY = "galaxy"
+    BIOTOOLS = "biotools"
+
+
+class _ALLOWED_COMMANDS (Enum):
+    EXPORT = "export"
+    PUBLISH = "publish"
+    TEMPLATE = "template"
+
+
+# loaded edam mapping dictionary
+_EDAM_DICT = None
+
+# reference to the Galaxy instance in use
+_GALAXY_INSTANCE = None
+
+#
 _ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -1101,21 +1121,6 @@ def config_parser(configfile):
 def run():
     requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
     logging.getLogger("requests").setLevel(logging.ERROR)
-    parser = argparse.ArgumentParser(description="Galaxy instance tool parsing, for integration in biotools/bioregistry")
-    parser.set_defaults(resource='all')
-    parser.add_argument("--config_file", help="config.ini file for regate or remag")
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--no-push", action='store_true', help="do not push Galaxy resources on ELIXIR Bio.Tools")
-    group.add_argument("--push-only", action='store_true', help="push on ELIXIR Bio.Tools only Galaxy resources already converted")
-    sp = parser.add_subparsers(help='commands')
-    sp0 = sp.add_parser("template", help="generate a config_file template")
-    sp0.set_defaults(resource='template')
-    sp1 = sp.add_parser("tools", help="convert and/or push only Galaxy tools")
-    sp1.set_defaults(resource='tools')
-    sp1.add_argument("--filter", help="list of comma separated IDs of galaxy tools")
-    sp2 = sp.add_parser("workflows", help="convert and/or push only Galaxy workflows")
-    sp2.set_defaults(resource='workflows')
-    sp2.add_argument("--filter", help="list of comma separated IDs of galaxy workflows")
 
     # FIXME:
     if len(sys.argv) == 1:
@@ -1220,4 +1225,58 @@ def run():
     elif args.resource == "template":
         generate_template()
     else:
+def build_cli_parser():
+    parser = argparse.ArgumentParser(description="Bridging Tool for Galaxy and BioTools Registry",
+                                     formatter_class=lambda prog: argparse.HelpFormatter(prog, width=140, max_help_position=100))
+
+    parser.add_argument("--debug", action="store_true", help="Enable DEBUG level")
+    parser.add_argument("--config_file",
+                        help="configuration file for regate or remag",
+                        default="regate.ini")
+
+    sp = parser.add_subparsers(title='available commands')
+
+    # template command
+    template_parser = sp.add_parser("template", help="generate a template for the 'regate.ini' configuration file")
+    template_parser.set_defaults(command='template')
+    template_parser.add_argument("-f", "--file", dest="filename", default="regate.ini",
+                                 help="configuration filename for regate or remag (default 'regate.ini')")
+
+    # export command
+    export_parser = sp.add_parser("export",
+                                  help="export (and optionally publish) tools and/or workflows ",
+                                  formatter_class=lambda prog: argparse.HelpFormatter(prog, width=140, max_help_position=100))
+    export_parser.add_argument("--from", dest="platform", choices=[o.value for o in _ALLOWED_SOURCES],
+                               required=True,
+                               help="source platform for exporting tools and/or workflows")
+    export_parser.add_argument("--publish", action='store_true', help="Publish tools and/or workflows")
+    export_parser.set_defaults(command='export')
+    export_parser.set_defaults(resource='all')
+
+    # publish command
+    publish_parser = sp.add_parser("publish",
+                                   help="publish just exported tools and/or workflows",
+                                   formatter_class=lambda prog: argparse.HelpFormatter(prog, width=140, max_help_position=100))
+    publish_parser.add_argument("--to", dest="platform", choices=[o.value for o in _ALLOWED_SOURCES], required=True,
+                                help="target platform for publishing tools and/or workflows")
+    publish_parser.set_defaults(command='publish')
+    publish_parser.set_defaults(resource='all')
+
+    # add resource_parser as subparser of the {export,publish}_pasers
+    for parent_parser in [export_parser, publish_parser]:
+        resource_subparsers = parent_parser.add_subparsers(
+            title="types of resource to {}".format("export" if parent_parser == export_parser else "publish"))
+        all_res_parser = resource_subparsers.add_parser("all", help="tools and workflows (default)",
+                                                        formatter_class=lambda prog: argparse.HelpFormatter(prog, width=140, max_help_position=100))
+        all_res_parser.set_defaults(resource='all')
+
+        tool_res_parser = resource_subparsers.add_parser("tools", help="tools")
+        tool_res_parser.set_defaults(resource='tools')
+        tool_res_parser.add_argument("--filter", help="list of comma separated tool IDs")
+
+        wf_res_parser = resource_subparsers.add_parser("workflows", help="workflows")
+        wf_res_parser.set_defaults(resource='workflows')
+        wf_res_parser.add_argument("--filter", help="list of comma separated workflow IDs")
+
+    return parser
         parser.print_help()
