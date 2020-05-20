@@ -40,7 +40,6 @@ from bioblend.galaxy import GalaxyInstance as _GalaxyInstance
 from logging.handlers import RotatingFileHandler
 
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
 
 formatter = logging.Formatter('%(asctime)s :: %(levelname)s :: %(message)s')
 
@@ -1068,53 +1067,54 @@ def write_xml_files(tool_name, general_dict, tool_dir, xmltemplate=None):
         tool_file.write(str(template))
 
 
-def build_biotools_files(conf, mapping_edam, galaxy_tools_metadata=[], galaxy_workflows_metadata=[]):
 def get_resource_folder(conf, platform, type):
     base_dir = conf.tool_dir
     return "{}{}".format(os.path.join(base_dir, platform, type),'s')
 
+
+def build_biotools_files(conf, type, galaxy_metadata):
     """
     :param tools_metadata:
     :return:
     """
     # setup tools paths
-    base_dir = conf.tool_dir
-    tools_dir = os.path.join(base_dir, "tools")
-    workflows_dir = os.path.join(base_dir, "workflows")
+    tools_dir = get_resource_folder(conf, "biotools", type)
     if not os.path.exists(tools_dir):
         os.makedirs(tools_dir)
-    if not os.path.exists(workflows_dir):
-        os.makedirs(workflows_dir)
+
+    # load edam mapping
+    mapping_edam = load_edam_dict(conf)
 
     # write tools
-    for galaxy_tool_metadata in galaxy_tools_metadata:
-        biotools_metadata = map_tool(galaxy_tool_metadata, conf, mapping_edam)
-        file_name = build_filename(galaxy_tool_metadata['id'], galaxy_tool_metadata['version'])
-        write_json_files(file_name, biotools_metadata, tools_dir)
-        with open(os.path.join(tools_dir, "{}.yaml".format(file_name)), 'w') as outfile:
-            ruamel.yaml.safe_dump(biotools_metadata, outfile)
+    mappings = []
+    for metadata in galaxy_metadata:
+        try:
+            biotools_metadata = map_tool(metadata, conf, mapping_edam) if type == "tool" else map_workflow(metadata, conf, mapping_edam)
+            file_name = build_filename(metadata['id' if type == "tool" else "uuid"], metadata['version'])
+            write_json_files(file_name, biotools_metadata, tools_dir)
+            with open(os.path.join(tools_dir, "{}.yaml".format(file_name)), 'w') as outfile:
+                ruamel.yaml.safe_dump(biotools_metadata, outfile)
+            mappings.append(biotools_metadata)
+        except Exception as e:
+            if logger.level == logging.DEBUG:
+                logger.exception(e)
+    return mappings
 
-    # write workflows
-    for galaxy_workflow_metadata in galaxy_workflows_metadata:
-        biotools_metadata = map_workflow(galaxy_workflow_metadata, conf, mapping_edam)
-        file_name = build_filename(galaxy_workflow_metadata['uuid'], galaxy_workflow_metadata['version'])
-        write_json_files(file_name, biotools_metadata, workflows_dir)
-        with open(os.path.join(workflows_dir, "{}.yaml".format(file_name)), 'w') as outfile:
-            ruamel.yaml.safe_dump(biotools_metadata, outfile)
 
-
-def generate_template():
+def generate_template(filename="regate.ini"):
     """
     :return:
     """
+    if os.path.exists(filename):
+        raise FileExistsError("Filename '%s' already exists!", filename)
     template_config = get_data_path('regate.ini')
     with open(template_config, 'r') as configtemplate:
-        with open('regate.ini', 'w') as fp:
+        with open(filename, 'w') as fp:
             for line in configtemplate:
                 fp.write(line)
 
 
-def config_parser(configfile):
+def load_configuration(configfile):
     """
     :param configfile:
     :return:
@@ -1124,113 +1124,116 @@ def config_parser(configfile):
     return configuration
 
 
-def run():
-    requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
-    logging.getLogger("requests").setLevel(logging.ERROR)
 
-    # FIXME:
-    if len(sys.argv) == 1:
-        parser.print_help()
-        sys.exit(1)
 
-    args = parser.parse_args()
+def load_config(options):
+    if not os.path.exists(options.config_file):
+        raise IOError("{0} doesn't exist".format(options.config_file))
+    config = Config(options.config_file, "regate", options)
+    logger.debug("Configuration file: %r", config)
+    return config
 
-    if args.resource != "template":
-        if not os.path.exists(args.config_file):
-            raise IOError("{0} doesn't exist".format(args.config_file))
-        config = Config(args.config_file, "regate", args)
-        if not args.push_only:
-            gi = GalaxyInstance(config.galaxy_url_api, key=config.api_key)
-            gi.verify = False
 
-            # Load EDAM mapping
-            if config.yaml_file:
-                edam_dict = build_edam_dict(config.yaml_file)
-            else:
-                edam_dict = build_edam_dict(get_data_path('yaml_mapping.yaml'))
+def load_edam_dict(config):
+    # if not EDAM_DICT:
+    if config.yaml_file:
+        EDAM_DICT = build_edam_dict(config.yaml_file)
+    else:
+        EDAM_DICT = build_edam_dict(get_data_path('yaml_mapping.yaml'))
+    return EDAM_DICT
 
-            ### TOOLs #######################################################################################
-            tools_metadata = []
-            if args.resource == "all" or args.resource == "tools":
-                galaxy_tools = None
-                if args.filter:
-                    galaxy_tools = [{'id': tool_id} for tool_id in args.filter.split(",")]
-                else:
-                    # Retrieve all available tools in the Galaxy platform
-                    try:
-                        galaxy_tools = gi.tools.get_tools()
-                        # Ensure the list doesn't contain diplicates checking ID and version
-                        detect_toolid_duplicate(galaxy_tools)
-                    except ConnectionError as e:
-                        raise ConnectionError("Connection with the Galaxy server {0} failed, {1}".format(config.galaxy_url_api, e))
 
-                if galaxy_tools:
-                    # Load list of tools to be ignored
-                    default_tools = config.tools_default.split(',')
-                    # Load tools details
-                    for tool in galaxy_tools:
-                        if not tool['id'] in default_tools:
-                            try:
-                                metadata = gi.tools.show_tool(tool_id=tool['id'], io_details=True, link_details=True)
-                                metadata['config'] = get_galaxy_tool_wrapper_config(metadata['id'], config)
-                                tools_metadata.append(metadata)
-                            except ConnectionError as e:
-                                logger.error("Error during connection with exposed API method for tool {0}".format(
-                                    str(tool['id'])), exc_info=True)
+def export_galaxy_tools(config, tools_filter=None):
+    # Build the list of tools to export
+    galaxy_metadata = GalaxyPlatform.getInstance().get_tools(ids=tools_filter, ignore=config.tools_default)
+    # Generate BioTools files for both tools
+    biotools_metadata = build_biotools_files(config, type="tool", galaxy_metadata=galaxy_metadata)
+    return biotools_metadata
 
-            ### WORKFLOWs ###################################################################################
-            workflows_metadata = []
-            if args.resource == "all" or args.resource == "workflows":
-                galaxy_workflows = None
-                if args.filter:
-                    galaxy_workflows = [{'id': tool_id} for tool_id in args.filter.split(",")]
-                else:
-                    # Retrieve all available tools in the Galaxy platform
-                    try:
-                        galaxy_workflows = gi.workflows.get_workflows()
-                        # Ensure the list doesn't contain diplicates checking ID and version
-                        # detect_toolid_duplicate(galaxy_workflows)
-                    except ConnectionError as e:
-                        raise ConnectionError("Connection with the Galaxy server {0} failed, {1}".format(config.galaxy_url_api, e))
 
-                # Load workdlows details
-                if galaxy_workflows:
-                    for wf in galaxy_workflows:
-                        try:
-                            metadata = gi.workflows.export_workflow_dict(wf['id'])
-                            workflows_metadata.append(metadata)
-                        except ConnectionError as e:
-                            logger.error("Error during connection with exposed API method for workflow {0}".format(
-                                str(wf['id'])), exc_info=True)
+def export_galaxy_workflows(config, workflows_filter=None):
+    # exported workflows
+    # TODO: add ignore list for workflows, ignore=config.tools_default)
+    workflows_metadata = GalaxyPlatform.getInstance().get_workflows(ids=workflows_filter)
+    # Generate BioTools files for both tools and workflows
+    biotools_metadata = build_biotools_files(config, type="workflow", galaxy_metadata=workflows_metadata)
+    return biotools_metadata
 
-            # Generate BioTools files for both tools and workflows
-            build_biotools_files(config, edam_dict,
-                                 galaxy_tools_metadata=tools_metadata,
-                                 galaxy_workflows_metadata=workflows_metadata)
 
+def export_from_galaxy(options):
+    # Load configuration file
+    config = load_config(options)
+    # configure the Galaxy instance
+    GalaxyPlatform.getInstance().configure(config.galaxy_url, config.api_key)
+    # Export tools
+    tools = []
+    if options.resource == "tools" or options.resource == "all":
+        tools.extend(export_galaxy_tools(config, options.filter if "filter" in options else None))
+    # Export workflows
+    workflows = []
+    if options.resource == "workflows" or options.resource == "all":
+        workflows.extend(export_galaxy_workflows(config, options.filter if "filter" in options else None))
+    # Publish tool/workflows
+    if options.publish:
         # Build list of BioTools JSON files to publish
         biotools_json_files = []
-
-        tools_dir = os.path.join(config.tool_dir, "tools")
-        if args.resource == "all" or args.resource == "tools":
-            biotools_json_files.extend([f for f in glob.glob(os.path.join(tools_dir, "*.json")) if os.path.isfile(f)])
-
-        workflows_dir = os.path.join(config.tool_dir, "workflows")
-        if args.resource == "all" or args.resource == "workflows":
-            biotools_json_files.extend([f for f in glob.glob(os.path.join(workflows_dir, "*.json")) if os.path.isfile(f)])
-
+        biotools = tools.copy()
+        biotools.extend(workflows)
+        # setup tools paths
+        base_dir = config.tool_dir
+        for biotool in biotools:
+            tools_dir = os.path.join(base_dir, "workflows" if biotool["toolType"][0] == "Workflow" else "tools")
+            filename = os.path.join(tools_dir, "{}.json".format(build_filename(biotool['biotoolsID'], biotool['version'][0])))
+            print(filename)
+            if os.path.exists(filename):
+                biotools_json_files.append(filename)
+        # Publish BioTools files
         if len(biotools_json_files) == 0:
-            print("No file to publish on the ELIXIR registry '{}'".format(config.host))
-        elif not args.no_push:
-            # if config.xsdbiotools:
-            #     push_to_elix(config.login, config.host, config.ssl_verify,
-            #                  config.tool_dir, config.resourcename, xsd=config.xsdbiotools)
-            # else:
-            push_to_elix(config.login, config.host, config.ssl_verify, biotools_json_files, config.resourcename)
+            print("No file to publish on the ELIXIR registry '{}'".format(config.bioregistry_host))
+        else:
+            push_to_elix(config.login, config.bioregistry_host, config.ssl_verify, biotools_json_files, config.resourcename)
 
-    elif args.resource == "template":
-        generate_template()
+
+def export(args):
+    logger.debug("cmd: %s", args.command)
+    if args.platform == "galaxy":
+        export_from_galaxy(args)
+
+
+def publish_to_bioblend(options):
+    # Build list of BioTools JSON files to publish
+    biotools_json_files = []
+
+    # Load configuration file
+    config = load_config(options)
+    
+    tools_dir = get_resource_folder(config, _ALLOWED_SOURCES.BIOTOOLS.value, "tool")
+    if options.resource == "all" or options.resource == "tools":
+        biotools_json_files.extend([f for f in glob.glob(os.path.join(tools_dir, "*.json")) if os.path.isfile(f)])
+
+    workflows_dir = get_resource_folder(config, _ALLOWED_SOURCES.BIOTOOLS.value, "workflow")
+    if options.resource == "all" or options.resource == "workflows":
+        biotools_json_files.extend([f for f in glob.glob(os.path.join(workflows_dir, "*.json")) if os.path.isfile(f)])
+
+    if len(biotools_json_files) == 0:
+        print("No file to publish on the ELIXIR registry '{}'".format(config.bioregistry_host))
     else:
+        push_to_elix(config.login, config.bioregistry_host, config.ssl_verify, biotools_json_files, config.resourcename)
+
+
+def publish(args):
+    logger.debug("cmd: %s", args.command)
+    if args.platform == "biotools":
+        publish_to_bioblend(args)
+    else:
+        logger.error("Unsupported target platform '%s'", args.platform)
+
+
+def template(args):
+    logger.debug("cmd: %s", args.command)
+    generate_template(args.filename)
+
+
 def build_cli_parser():
     parser = argparse.ArgumentParser(description="Bridging Tool for Galaxy and BioTools Registry",
                                      formatter_class=lambda prog: argparse.HelpFormatter(prog, width=140, max_help_position=100))
@@ -1285,4 +1288,23 @@ def build_cli_parser():
         wf_res_parser.add_argument("--filter", help="list of comma separated workflow IDs")
 
     return parser
+
+
+def run():
+    requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+    logging.getLogger("requests").setLevel(logging.ERROR)
+    parser = build_cli_parser()
+    args = parser.parse_args()
+    logger.setLevel(logging.DEBUG if args.debug else logging.INFO)
+    logger.debug("CLI options: %s", args)
+
+    try:
+        if "command" in args:
+            globals()[args.command](args)
+        else:
+            parser.print_help()
+            sys.exit(1)
+    except KeyError as e:
+        logger.error("Command '%s' not found", args.command)
         parser.print_help()
+        sys.exit(1)
