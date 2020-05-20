@@ -326,13 +326,13 @@ def build_tool_name(tool_id, prefix, suffix):
     except IndexError:
         tool_name = tool_id
     tool_name = re.sub('[^0-9a-zA-Z\_\-\.\~]', '-', tool_name)
-    if prefix:
-        name = str(prefix) + '-' + tool_name
-    else:
-        name = tool_name
-    if suffix:
-        name = name + '-' + str(suffix)
-    return name
+    if len(tool_name) > 100:
+        tool_name = tool_name[:100]
+    if prefix and (len(tool_name) + len(prefix) <= 100):
+        tool_name = str(prefix) + '-' + tool_name
+    if suffix and (len(tool_name) + len(suffix) <= 100):
+        tool_name = tool_name + '-' + str(suffix)
+    return tool_name
 
 
 def get_source_registry(tool_id):
