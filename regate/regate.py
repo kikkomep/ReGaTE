@@ -35,7 +35,7 @@ from datauri import DataURI
 from urllib.parse import urljoin
 from Cheetah.Template import Template
 from bioblend.galaxy.client import ConnectionError
-from bioblend.galaxy import GalaxyInstance
+from bioblend.galaxy import GalaxyInstance as _GalaxyInstance
 from logging.handlers import RotatingFileHandler
 
 logger = logging.getLogger()
@@ -166,6 +166,153 @@ class Config(object):
             return True
         else:
             return False
+
+
+class GalaxyPlatform(object):
+
+    __instance = None
+
+    @staticmethod
+    def getInstance():
+        if not GalaxyPlatform.__instance:
+            GalaxyPlatform()
+        return GalaxyPlatform.__instance
+
+    def __init__(self):
+        if GalaxyPlatform.__instance:
+            raise Exception("Singleton class: an instance of this class already exists!")
+        GalaxyPlatform.__instance = self
+        self._galaxy_instance = None
+
+    @property
+    def api(self):
+        if not self._galaxy_instance:
+            raise Exception("Bioblend API not initialized")
+        return self._galaxy_instance
+
+    def configure(self, galaxy_url, galaxy_api_key):
+        self._galaxy_instance = _GalaxyInstance(galaxy_url, key=galaxy_api_key)
+        self._galaxy_instance.verify = False
+
+    def get_tool(self, id):
+        try:
+            metadata = self.api.tools.show_tool(tool_id=id, io_details=True, link_details=True)
+            tool_config = self.get_galaxy_tool_wrapper_config(metadata)
+            if tool_config:
+                metadata['config'] = tool_config
+            return metadata
+        except ConnectionError as e:
+            if e.status_code == 404:
+                logger.warning("Unable to find the tool '%r' on the Galaxy platform @ '%s'", id, self.api.base_url)
+            else:
+                logger.error("Error during connection with exposed API method for tool {0}".format(str(id)), exc_info=True)
+            if logger.level == logging.DEBUG:
+                logger.exception(e)
+            return None
+
+    def get_tools(self, ids=None, ignore=None):
+        tools_metadata = []
+        # List of tools to retrieve
+        galaxy_tools = None
+        if ids:
+            galaxy_tools = [{'id': tool_id} for tool_id in ids.split(",")]
+        else:
+            # Retrieve all available tools in the Galaxy platform
+            try:
+                galaxy_tools = self.api.tools.get_tools()
+                # Ensure the list doesn't contain diplicates checking ID and version
+                detect_toolid_duplicate(galaxy_tools)
+            except ConnectionError as e:
+                raise ConnectionError("Connection with the Galaxy server {0} failed, {1}".format(self.api.base_url, e))
+
+        if galaxy_tools:
+            # Set list of tools to be ignored
+            ignore_list = ignore.split(',') if ignore else []
+            # Load tools details
+            for tool in galaxy_tools:
+                if not tool['id'] in ignore_list:
+                    tool = self.get_tool(tool['id'])
+                    if tool:
+                        tools_metadata.append(tool)
+        return tools_metadata
+
+    def get_galaxy_tool_wrapper_archive(self, tool_id):
+        try:
+            tool_url = '{}/{}/download'.format(self.api.tools.url, tool_id)
+            r = self.api.tools._get(url=tool_url, json=False)
+            if r.status_code == 200:
+                return r.content
+        except Exception as e:
+            if logger.level == logging.DEBUG:
+                logger.exception(e)
+        return None
+
+    def get_galaxy_tool_wrapper_config(self, tool_metadata):
+        temp = tempfile.NamedTemporaryFile()
+        temp_dir = tempfile.TemporaryDirectory()
+        try:
+            archive = self.get_galaxy_tool_wrapper_archive(tool_metadata['id'])
+            if archive:
+                with open(temp.name, "wb") as out:
+                    out.write(archive)
+                tar_archive = tarfile.open(temp.name, 'r:gz')
+                filename_pattern = re.compile(r"^({}|{})\.xml$".format(
+                    tool_metadata['id'],
+                    tool_metadata['tool_shed_repository']['name']  \
+                        if "tool_shed_repository" in tool_metadata and "name" in tool_metadata['tool_shed_repository'] \
+                        else tool_metadata['name']))
+                files = [f for f in tar_archive.getnames()]
+                logger.debug("List of files: %r", files)
+                print(json.dumps(tool_metadata, indent=2))
+                if len(files) == 0:
+                    logger.warn("No file found on the archive of the galaxy tool wrapper '%s'!", tool_metadata['id'])
+                    return None
+                elif len(files) > 1:
+                    files = [f for f in tar_archive.getnames() if filename_pattern.match(f)]
+                    if len(files) == 0 or len(files) > 1:
+                        logger.warn("Unable to detect the wrapper config file for tool '%s'", tool_metadata['id'])
+                        logger.debug("Files %r (%r)", files, filename_pattern.pattern)
+                        return None
+                tar_archive.extractall(path=temp_dir.name)
+                xml_filename = os.path.join(temp_dir.name, files[0])
+                xml_config = ET.parse(xml_filename)
+                root = xml_config.getroot()
+                return {
+                    'command': root.find("command").text,
+                    'help': root.find("help").text,
+                }
+        finally:
+            temp.close()
+            temp_dir.cleanup()
+
+    def get_workflows(self, ids=None, ignore=None):
+        workflows_metadata = []
+        # build the list of workflows to export
+        galaxy_workflows = None
+        if ids:
+            galaxy_workflows = [{'id': tool_id} for tool_id in ids.split(",")]
+        else:
+            # Retrieve all available tools in the Galaxy platform
+            try:
+                galaxy_workflows = self.api.workflows.get_workflows()
+                # Ensure the list doesn't contain diplicates checking ID and version
+                # detect_toolid_duplicate(galaxy_workflows)
+            except ConnectionError as e:
+                raise ConnectionError("Connection with the Galaxy server {0} failed, {1}".format(self.api.base_url, e))
+        # Load workdlows details
+        if galaxy_workflows:
+            # Define list of workflows to be ignored
+            ignore_list = ignore.split(',') if ignore else []
+            # Load workflow details
+            for wf in galaxy_workflows:
+                if not wf['id'] in ignore_list:
+                    try:
+                        metadata = self.api.workflows.export_workflow_dict(wf['id'])
+                        workflows_metadata.append(metadata)
+                    except ConnectionError as e:
+                        logger.error("Error during connection with exposed API method for workflow {0}".format(
+                            str(wf['id'])), exc_info=True)
+        return workflows_metadata
 
 
 def build_tool_name(tool_id, prefix, suffix):
@@ -405,7 +552,7 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
         }]
     }
 
-    tool_archive = get_galaxy_tool_wrapper_archive(galaxy_metadata['id'], conf)
+    tool_archive = GalaxyPlatform.getInstance().get_galaxy_tool_wrapper_archive(galaxy_metadata['id'])
     if tool_archive:
         mapping['download'].append(
             {
@@ -426,14 +573,11 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
 
 def map_workflow_tools(galaxy_metadata, config, mapping_edam):
     tools = {}
-    gi = GalaxyInstance(config.galaxy_url_api, key=config.api_key)
     for step_index, step in galaxy_metadata["steps"].items():
         if step['type'] == 'tool':
-            galaxy_tool_metadata = gi.tools.show_tool(step['tool_id'], link_details=True, io_details=True)
-            try:
-                galaxy_tool_metadata['config'] = get_galaxy_tool_wrapper_config(galaxy_tool_metadata['id'], config)
-            except Exception as e:
-                logger.warn("Unable to download tool: %r", step['tool_id'])
+            galaxy_tool_metadata = GalaxyPlatform.getInstance().get_tool(step['tool_id'])
+            if not galaxy_tool_metadata:
+                raise Exception("Unable to retrieve metadata of tool '%s'", step['tool_id'])
             tools[step['tool_id']] = map_tool(galaxy_tool_metadata, config, mapping_edam)
     return tools
 
@@ -733,44 +877,6 @@ def build_edam_dict(yaml_file):
             for term in value['data']:
                 term['uri'] = edam_to_uri(term['uri'], 'data')
     return map_edam
-
-
-def get_galaxy_tool_wrapper_archive(tool_id, config):
-    try:
-        gi = GalaxyInstance(config.galaxy_url_api, key=config.api_key)
-        tool_url = '{}/{}/download'.format(gi.tools.url, tool_id)
-        r = gi.tools._get(url=tool_url, json=False)
-        if r.status_code == 200:
-            return r.content
-    except Exception as e:
-        logger.exception(e)
-    return None
-
-
-def get_galaxy_tool_wrapper_config(tool_id, config):
-    temp = tempfile.NamedTemporaryFile()
-    temp_dir = tempfile.TemporaryDirectory()
-    try:
-        archive = get_galaxy_tool_wrapper_archive(tool_id, config)
-        if archive:
-            with open(temp.name, "wb") as out:
-                out.write(archive)
-            tar_archive = tarfile.open(temp.name, 'r:gz')
-            files = [f for f in tar_archive.getnames() if f.endswith('xml')]
-            if len(files) > 1:
-                logger.warn("Unable to detect the wrapper config file: more than one XML file found!")
-                return None
-            tar_archive.extractall(path=temp_dir.name)
-            xml_filename = os.path.join(temp_dir.name, files[0])
-            xml_config = ET.parse(xml_filename)
-            root = xml_config.getroot()
-            return {
-                'command': root.find("command").text,
-                'help': root.find("help").text,
-            }
-    finally:
-        temp.close()
-        temp_dir.cleanup()
 
 
 def _build_request_headers(token=None):
