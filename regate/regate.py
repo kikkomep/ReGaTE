@@ -61,6 +61,7 @@ file_handler_edam.setLevel(logging.WARNING)
 file_handler_edam.setFormatter(formatter)
 logger.addHandler(file_handler_edam)
 
+REGATE_PREFIX_ID = "biotools:regate"
 DEFAULT_EDAM_DATA = {
     "term": "Data",
     "uri": "http://edamontology.org/data_0006"
@@ -495,6 +496,11 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
         'biotoolsID': tool_id,
         'biotoolsCURIE': 'biotools:{}'.format(tool_id),
         'otherID': [
+            {
+                'type': "biotoolsCURIE",
+                'value': "{}_{}".format(REGATE_PREFIX_ID, galaxy_metadata['id']),
+                'version': galaxy_metadata['version']
+            }
         ],
 
         ##### FUNCTION GROUP ######################################################################################
@@ -633,6 +639,11 @@ def map_workflow(galaxy_metadata, conf, mapping_edam):
         'biotoolsID': galaxy_metadata['uuid'],
         'biotoolsCURIE': 'biotools:{}'.format(galaxy_metadata['uuid']),
         'otherID': [
+            {
+                'type': "biotoolsCURIE",
+                'value': "{}_{}".format(REGATE_PREFIX_ID, galaxy_metadata['uuid']),
+                'version': galaxy_metadata['version']
+            }
         ],
 
         ##### FUNCTION GROUP ######################################################################################
