@@ -501,7 +501,7 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
         'function': build_function_dict(galaxy_metadata, edam_mapping),
 
         ##### LABELS GROUP ######################################################################################
-        'toolType': ["Workbench"],  # TODO: check if it is OK
+        'toolType': ["Web application"],
         'topic': galaxy_metadata['edam_topics'] \
         if 'edam_topics' in galaxy_metadata and len(galaxy_metadata['edam_topics']) > 0 \
         else [DEFAULT_EDAM_TOPIC],
