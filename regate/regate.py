@@ -125,12 +125,12 @@ class Config(object):
                     self.contactEmail = self.assign("galaxy_server", "contactEmail", ismandatory=True)
                     self.contactTypeEntity = self.assign("galaxy_server", "contactTypeEntity", ismandatory=True)
                     self.contactTypeRole = self.assign("galaxy_server", "contactTypeRole", ismandatory=True)
-                    
+
                 if options.platform == _ALLOWED_SOURCES.BIOTOOLS.value or "publish" in options:
                     self.login = self.assign("regate_specific_section", "login", ismandatory=True,
                                              message="login option is mandatory to push resources to Elixir")
                     self.bioregistry_host = self.assign("regate_specific_section", "bioregistry_host", ismandatory=True,
-                                            message="bioregistry_host option is mandatory to push resources to Elixir")
+                                                        message="bioregistry_host option is mandatory to export or publish tools and/or workflows to Elixir")
                     self.ssl_verify = self.assign("regate_specific_section", "ssl_verify", ismandatory=True,
                                                   message="ssl_verify option is mandatory to push resources to Elixir", boolean=True)
                     self.accessibility = self.assign("regate_specific_section", "accessibility", ismandatory=True,
