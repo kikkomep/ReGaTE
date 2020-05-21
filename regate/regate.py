@@ -1080,7 +1080,7 @@ def write_xml_files(tool_name, general_dict, tool_dir, xmltemplate=None):
 
 def get_resource_folder(conf, platform, type):
     base_dir = conf.tool_dir
-    return "{}{}".format(os.path.join(base_dir, platform, type),'s')
+    return "{}{}".format(os.path.join(base_dir, platform, type), 's')
 
 
 def build_biotools_files(conf, type, galaxy_metadata):
@@ -1133,8 +1133,6 @@ def load_configuration(configfile):
     configuration = configparser.ConfigParser()
     configuration.read(configfile)
     return configuration
-
-
 
 
 def load_config(options):
@@ -1190,10 +1188,11 @@ def export_from_galaxy(options):
         biotools_json_files = []
         biotools = tools.copy()
         biotools.extend(workflows)
-        # setup tools paths
-        base_dir = config.tool_dir
+        # collect biotools files
         for biotool in biotools:
-            tools_dir = os.path.join(base_dir, "workflows" if biotool["toolType"][0] == "Workflow" else "tools")
+            tools_dir = get_resource_folder(config,
+                                            _ALLOWED_SOURCES.BIOTOOLS.value,
+                                            "workflow" if biotool["toolType"][0] == "Workflow" else "tool")
             filename = os.path.join(tools_dir, "{}.json".format(build_filename(biotool['biotoolsID'], biotool['version'][0])))
             print(filename)
             if os.path.exists(filename):
