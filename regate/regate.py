@@ -1247,6 +1247,25 @@ def get_elixir_tools_list(registry_url, tool_collectionID, tool_type=_RESOURCE_T
     return None
 
 
+def push_to_galaxy(config, galaxy_json_files):
+    # configure the Galaxy instance
+    gi = GalaxyPlatform.getInstance()
+    gi.configure(config.galaxy_url, config.api_key)
+    # setup tools paths
+    for galaxy_json_file in galaxy_json_files:
+        try:
+            with open(galaxy_json_file) as f:
+                resource = json.load(f)
+                if resource.get('model_class', False) == "StoredWorkflow" \
+                    or resource.get("a_galaxy_workflow", False) == "true":
+                    gi.import_workflow(galaxy_json_file)
+                elif resource.get('model_class', False) == "Tool":
+                    pass
+        except Exception as e:
+            logger.error("Galaxy import error for tool in the '%s' JSON file", galaxy_json_file)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+
 
 def export_biotools_tools(config, filter=None):
     logger.warn("Export tools from BioTools is not implemented yet")
