@@ -1359,10 +1359,30 @@ def publish_to_bioblend(options):
         push_to_elix(config.login, config.bioregistry_host, config.ssl_verify, biotools_json_files, config.resourcename)
 
 
+def publish_to_galaxy(options):
+    # Build list of BioTools JSON files to publish
+    galaxy_json_files = []
+
+    # Load configuration file
+    config = load_config(options)
+
+    tools_dir = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "tool")
+    if options.resource == "all" or options.resource == "tools":
+        galaxy_json_files.extend([f for f in glob.glob(os.path.join(tools_dir, "*.json")) if os.path.isfile(f)])
+
+    workflows_dir = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "workflow")
+    if options.resource == "all" or options.resource == "workflows":
+        galaxy_json_files.extend([f for f in glob.glob(os.path.join(workflows_dir, "*.json")) if os.path.isfile(f)])
+
+    push_to_galaxy(config, galaxy_json_files)
+
+
 def publish(args):
     logger.debug("cmd: %s", args.command)
     if args.platform == "biotools":
         publish_to_bioblend(args)
+    if args.platform == "galaxy":
+        publish_to_galaxy(args)
     else:
         logger.error("Unsupported target platform '%s'", args.platform)
 
