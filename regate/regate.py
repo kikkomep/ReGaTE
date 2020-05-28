@@ -1322,21 +1322,10 @@ def export_from_biotools(options):
         workflows.extend(export_biotools_workflows(config, options.filter if "filter" in options else None))
     # Publish tool/workflows
     if options.publish:
-        # configure the Galaxy instance
-        gi = GalaxyPlatform.getInstance()
-        gi.configure(config.galaxy_url, config.api_key)
         # Build list of BioTools JSON files to publish
-        galaxy_json_files = []
-        galaxy_resources = tools.copy()
-        galaxy_resources.extend(workflows)
-        # setup tools paths
-        for resource in galaxy_resources:
-            try:
-                gi.import_workflow(resource[REGATE_DATA_FILE])
-            except Exception as e:
-                logger.error("Galaxy import error for tool '%s'", resource[REGATE_DATA_FILE])
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.exception(e)
+        galaxy_json_files = [resource[REGATE_DATA_FILE] for resource in tools] + \
+                            [resource[REGATE_DATA_FILE] for resource in workflows]
+        push_to_galaxy(config, galaxy_json_files)
 
 
 def export(args):
