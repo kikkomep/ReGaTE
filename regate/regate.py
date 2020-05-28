@@ -1464,5 +1464,7 @@ def run():
             sys.exit(1)
     except KeyError as e:
         logger.error("Command '%s' not found", args.command)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
         parser.print_help()
         sys.exit(1)
