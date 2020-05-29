@@ -86,8 +86,6 @@ DEFAULT_EDAM_TOPIC = {
 }
 
 
-
-
 class _RESOURCE_TYPE(Enum):
     TOOL = "tool"
     WORKFLOW = "workflow"
@@ -211,7 +209,6 @@ class Config(object):
 class GalaxyPlatform(object):
 
     __instance = None
-
 
     @staticmethod
     def getInstance():
@@ -362,10 +359,10 @@ class GalaxyPlatform(object):
                 data_json = json.load(data_file)
                 self.api.workflows.import_workflow_dict(data_json, publish=True)
         except ConnectionError as e:
-                logger.error("Galaxy import error for workflow in the '%s' JSON file", workflow_filename)
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.exception(e)
-        
+            logger.error("Galaxy import error for workflow in the '%s' JSON file", workflow_filename)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+
 
     def import_resources(self, galaxy_json_files, check_exists=True):
         workflows = self.get_workflows() if check_exists else False
@@ -373,13 +370,13 @@ class GalaxyPlatform(object):
             with open(galaxy_json_file) as f:
                 resource = json.load(f)
                 if resource.get('model_class', False) == "StoredWorkflow" \
-                    or resource.get("a_galaxy_workflow", False) == "true":
+                        or resource.get("a_galaxy_workflow", False) == "true":
                     if check_exists and \
-                        len([w for w in workflows 
-                            if w['name']==resource['name'] and 
-                               w['version']==resource['version']]) > 0:
-                            logger.info("Workflow %s [ver. %s] already exists", resource['name'], resource['version'])
-                            continue
+                        len([w for w in workflows
+                             if w['name'] == resource['name'] and
+                             w['version'] == resource['version']]) > 0:
+                        logger.info("Workflow %s [ver. %s] already exists", resource['name'], resource['version'])
+                        continue
                     self.import_workflow(galaxy_json_file)
                 elif resource.get('model_class', False) == "Tool":
                     pass
@@ -599,14 +596,7 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
                 'gridid': '',
                 'note': ''
             }
-        ],
-
-        # FIXME: to remap
-        'uses': [{
-            "usesName": 'Toolshed entry for "' + galaxy_metadata['id'] + '"',
-            "usesHomepage": 'http://' + requests.utils.quote(galaxy_metadata['id']),
-            "usesVersion": galaxy_metadata['version']
-        }]
+        ]
     }
 
     ### Add ToolShedRepository ###
@@ -1338,7 +1328,7 @@ def export_biotools_workflows(config, filter=None):
     print(json.dumps(workflows, indent=2))
     print("number of workflows: %d", len(workflows))
 
-    # init output folder 
+    # init output folder
     output_folder = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "workflow")
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -1347,8 +1337,8 @@ def export_biotools_workflows(config, filter=None):
     for workflow in workflows:
         try:
             links = [link["url"] for link in workflow["download"]
-                        if link["url"].startswith(config.data_uri_prefix)]
-            if len(links)==0:
+                     if link["url"].startswith(config.data_uri_prefix)]
+            if len(links) == 0:
                 raise Exception("No DataURI link found")
             elif len(links) > 1:
                 raise Exception("More than one DataURI link found. We support one version only")
@@ -1536,3 +1526,5 @@ def run():
             logger.exception(e)
         parser.print_help()
         sys.exit(1)
+    except KeyboardInterrupt as e:
+        logger.error("'%s' command interrupted by user", args.command)
