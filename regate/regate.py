@@ -356,6 +356,22 @@ class GalaxyPlatform(object):
             data_json = json.load(data_file)
             self.api.workflows.import_workflow_dict(data_json, publish=True)
 
+    def import_resources(self, galaxy_json_files):
+        # setup tools paths
+        for galaxy_json_file in galaxy_json_files:
+            try:
+                with open(galaxy_json_file) as f:
+                    resource = json.load(f)
+                    if resource.get('model_class', False) == "StoredWorkflow" \
+                        or resource.get("a_galaxy_workflow", False) == "true":
+                        self.import_workflow(galaxy_json_file)
+                    elif resource.get('model_class', False) == "Tool":
+                        pass
+            except Exception as e:
+                logger.error("Galaxy import error for tool in the '%s' JSON file", galaxy_json_file)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
+
 
 def build_tool_name(tool_id, prefix, suffix):
     """
@@ -1247,24 +1263,24 @@ def get_elixir_tools_list(registry_url, tool_collectionID, tool_type=_RESOURCE_T
     return None
 
 
-def push_to_galaxy(config, galaxy_json_files):
-    # configure the Galaxy instance
-    gi = GalaxyPlatform.getInstance()
-    gi.configure(config.galaxy_url, config.api_key)
-    # setup tools paths
-    for galaxy_json_file in galaxy_json_files:
-        try:
-            with open(galaxy_json_file) as f:
-                resource = json.load(f)
-                if resource.get('model_class', False) == "StoredWorkflow" \
-                    or resource.get("a_galaxy_workflow", False) == "true":
-                    gi.import_workflow(galaxy_json_file)
-                elif resource.get('model_class', False) == "Tool":
-                    pass
-        except Exception as e:
-            logger.error("Galaxy import error for tool in the '%s' JSON file", galaxy_json_file)
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.exception(e)
+# def push_to_galaxy(config, galaxy_json_files):
+#     # configure the Galaxy instance
+#     gi = GalaxyPlatform.getInstance()
+#     gi.configure(config.galaxy_url, config.api_key)
+#     # setup tools paths
+#     for galaxy_json_file in galaxy_json_files:
+#         try:
+#             with open(galaxy_json_file) as f:
+#                 resource = json.load(f)
+#                 if resource.get('model_class', False) == "StoredWorkflow" \
+#                     or resource.get("a_galaxy_workflow", False) == "true":
+#                     gi.import_workflow(galaxy_json_file)
+#                 elif resource.get('model_class', False) == "Tool":
+#                     pass
+#         except Exception as e:
+#             logger.error("Galaxy import error for tool in the '%s' JSON file", galaxy_json_file)
+#             if logger.isEnabledFor(logging.DEBUG):
+#                 logger.exception(e)
 
 
 def export_biotools_tools(config, filter=None):
@@ -1312,6 +1328,9 @@ def export_biotools_workflows(config, filter=None):
 def export_from_biotools(options):
     # Load configuration file
     config = load_config(options)
+    # Init Galaxy
+    gi = GalaxyPlatform.getInstance()
+    gi.configure(config.galaxy_url, config.api_key)
     # Export tools
     tools = []
     if options.resource == "tools" or options.resource == "all":
@@ -1325,7 +1344,7 @@ def export_from_biotools(options):
         # Build list of BioTools JSON files to publish
         galaxy_json_files = [resource[REGATE_DATA_FILE] for resource in tools] + \
                             [resource[REGATE_DATA_FILE] for resource in workflows]
-        push_to_galaxy(config, galaxy_json_files)
+        gi.import_resources(galaxy_json_files)
 
 
 def export(args):
@@ -1366,6 +1385,10 @@ def publish_to_galaxy(options):
     # Load configuration file
     config = load_config(options)
 
+    # Init Galaxy
+    gi = GalaxyPlatform.getInstance()
+    gi.configure(config.galaxy_url, config.api_key)
+
     tools_dir = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "tool")
     if options.resource == "all" or options.resource == "tools":
         galaxy_json_files.extend([f for f in glob.glob(os.path.join(tools_dir, "*.json")) if os.path.isfile(f)])
@@ -1374,7 +1397,7 @@ def publish_to_galaxy(options):
     if options.resource == "all" or options.resource == "workflows":
         galaxy_json_files.extend([f for f in glob.glob(os.path.join(workflows_dir, "*.json")) if os.path.isfile(f)])
 
-    push_to_galaxy(config, galaxy_json_files)
+    gi.import_resources(galaxy_json_files)
 
 
 def publish(args):
