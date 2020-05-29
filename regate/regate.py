@@ -542,7 +542,7 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
         'otherID': [
             {
                 'type': "biotoolsCURIE",
-                'value': "{}_{}".format(REGATE_PREFIX_ID, galaxy_metadata['id']),
+                'value': "{}_{}".format(REGATE_PREFIX_ID, tool_id),
                 'version': galaxy_metadata['version']
             }
         ],
