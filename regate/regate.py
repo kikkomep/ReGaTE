@@ -64,6 +64,8 @@ logger.addHandler(file_handler_edam)
 
 REGATE_PREFIX_ID = "biotools:regate"
 
+TOOLSHED_PREFIX_ID = "biotools:toolshed"
+
 REGATE_DATA_FILE = "regate_data_file"
 
 DEFAULT_EDAM_DATA = {
@@ -607,6 +609,18 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
         }]
     }
 
+    ### Add ToolShedRepository ###
+    if 'tool_shed_repository' in galaxy_metadata:
+        toolshed = galaxy_metadata['tool_shed_repository']
+        mapping['otherID'].extend([
+            {
+                'type': "biotoolsCURIE",
+                'value': "{}_{}_repos_{}_{}_{}".format(TOOLSHED_PREFIX_ID,toolshed['tool_shed'], toolshed['owner'], toolshed['name'], toolshed['name']),
+                'version': toolshed['changeset_revision']
+            }
+        ])
+
+    ##### Download GROUP ######################################################################################
     tool_archive = GalaxyPlatform.getInstance().get_galaxy_tool_wrapper_archive(galaxy_metadata['id'])
     if tool_archive:
         mapping['download'].append(
