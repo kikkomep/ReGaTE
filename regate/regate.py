@@ -209,6 +209,7 @@ class GalaxyPlatform(object):
 
     __instance = None
 
+
     @staticmethod
     def getInstance():
         if not GalaxyPlatform.__instance:
@@ -351,26 +352,34 @@ class GalaxyPlatform(object):
                             str(wf['id'])), exc_info=True)
         return workflows_metadata
 
-    def import_workflow(self, workflow_filename):
-        with open(workflow_filename) as data_file:
-            data_json = json.load(data_file)
-            self.api.workflows.import_workflow_dict(data_json, publish=True)
 
-    def import_resources(self, galaxy_json_files):
-        # setup tools paths
-        for galaxy_json_file in galaxy_json_files:
-            try:
-                with open(galaxy_json_file) as f:
-                    resource = json.load(f)
-                    if resource.get('model_class', False) == "StoredWorkflow" \
-                        or resource.get("a_galaxy_workflow", False) == "true":
-                        self.import_workflow(galaxy_json_file)
-                    elif resource.get('model_class', False) == "Tool":
-                        pass
-            except Exception as e:
-                logger.error("Galaxy import error for tool in the '%s' JSON file", galaxy_json_file)
+    def import_workflow(self, workflow_filename):
+        try:
+            with open(workflow_filename) as data_file:
+                data_json = json.load(data_file)
+                self.api.workflows.import_workflow_dict(data_json, publish=True)
+        except ConnectionError as e:
+                logger.error("Galaxy import error for workflow in the '%s' JSON file", workflow_filename)
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.exception(e)
+        
+
+    def import_resources(self, galaxy_json_files, check_exists=True):
+        workflows = self.get_workflows() if check_exists else False
+        for galaxy_json_file in galaxy_json_files:
+            with open(galaxy_json_file) as f:
+                resource = json.load(f)
+                if resource.get('model_class', False) == "StoredWorkflow" \
+                    or resource.get("a_galaxy_workflow", False) == "true":
+                    if check_exists and \
+                        len([w for w in workflows 
+                            if w['name']==resource['name'] and 
+                               w['version']==resource['version']]) > 0:
+                            logger.info("Workflow %s [ver. %s] already exists", resource['name'], resource['version'])
+                            continue
+                    self.import_workflow(galaxy_json_file)
+                elif resource.get('model_class', False) == "Tool":
+                    pass
 
 
 def build_tool_name(tool_id, prefix, suffix):
