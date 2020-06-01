@@ -352,7 +352,8 @@ class GalaxyPlatform(object):
                             str(wf['id'])), exc_info=True)
         return workflows_metadata
 
-
+    
+    
     def import_workflow(self, workflow_filename):
         try:
             with open(workflow_filename) as data_file:
@@ -362,9 +363,37 @@ class GalaxyPlatform(object):
             logger.error("Galaxy import error for workflow in the '%s' JSON file", workflow_filename)
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
+    
 
+
+    def import_tool(self, tool_or_filename):
+        try:
+            data_json = tool_or_filename
+            if isinstance(tool_or_filename, str):
+                with open(tool_or_filename) as data_file:
+                    data_json = json.load(data_file)
+            if "tool_shed_repository" in data_json:
+                toolshed = data_json["tool_shed_repository"]
+                self.api.toolShed.install_repository_revision(
+                    tool_shed_url="https://{}".format(toolshed["tool_shed"]),
+                    name=toolshed["name"],
+                    owner=toolshed["owner"],
+                    changeset_revision=toolshed["changeset_revision"],
+                    install_tool_dependencies=False, 
+                    install_repository_dependencies=False, 
+                    install_resolver_dependencies=False, 
+                    tool_panel_section_id=None, 
+                    new_tool_panel_section_label=data_json["panel_section_name"]
+                )
+            else:
+                logger.error("Unable to find ToolShed repository info for tool '%s'", data_json["name"])
+        except ConnectionError as e:
+            logger.error("Galaxy import error for workflow in the '%s' JSON file", tool_or_filename)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
 
     def import_resources(self, galaxy_json_files, check_exists=True):
+        tools = self.get_tools() if check_exists else False
         workflows = self.get_workflows() if check_exists else False
         for galaxy_json_file in galaxy_json_files:
             with open(galaxy_json_file) as f:
@@ -379,7 +408,13 @@ class GalaxyPlatform(object):
                         continue
                     self.import_workflow(galaxy_json_file)
                 elif resource.get('model_class', False) == "Tool":
-                    pass
+                    if check_exists and \
+                        len([t for t in tools
+                             if t['name'] == resource['name'] and
+                             t['version'] == resource['version']]) > 0:
+                        logger.info("Tool %s [ver. %s] already exists", resource['name'], resource['version'])
+                        continue
+                    self.import_tool(galaxy_json_file)
 
 
 def build_tool_name(tool_id, prefix, suffix):
@@ -1268,7 +1303,6 @@ def export_from_galaxy(options):
                                             _ALLOWED_SOURCES.BIOTOOLS.value,
                                             "workflow" if biotool["toolType"][0] == "Workflow" else "tool")
             filename = os.path.join(tools_dir, "{}.json".format(build_filename(biotool['biotoolsID'], biotool['version'][0])))
-            print(filename)
             if os.path.exists(filename):
                 biotools_json_files.append(filename)
         # Publish BioTools files
@@ -1286,18 +1320,31 @@ def find_biotools_regate_id(tool):
     return None
 
 
-def get_elixir_tools_list(registry_url, tool_collectionID, tool_type=_RESOURCE_TYPE.TOOL):
+def find_biotools_toolshed_id(tool):
+    toolshed_id = None
+    for oid in tool["otherID"]:
+        if oid["value"].startswith(TOOLSHED_PREFIX_ID):
+            tid_parts = oid["value"].split("_")
+            toolshed_id = {
+                "tool_shed": tid_parts[1],
+                "owner": tid_parts[2],
+                "name": tid_parts[3],
+                "changeset_revision": oid["version"],
+            }
+    return toolshed_id
+
+
+def get_elixir_tools_list(registry_url, tool_type=_RESOURCE_TYPE.TOOL,  tool_collectionID=None, only_regate_tools=False):
     try:
         resource_type = "Web application" if tool_type == _RESOURCE_TYPE.TOOL else "Workflow"
-        # TODO: try first with version number
         res_url = urljoin(registry_url, '/api/tool')
-        resp = requests.get(res_url,
-                            headers=_build_request_headers(),
-                            params={"collectionID": tool_collectionID,
-                                    "toolType": resource_type})
+        params = {"toolType": resource_type}
+        if tool_collectionID:
+            params["collectionID"] = tool_collectionID
+        resp = requests.get(res_url, headers=_build_request_headers(), params=params)
         if resp.status_code == 200:
             # filter tools by otherID == biotools:regate_
-            return [t for t in resp.json()["list"] if find_biotools_regate_id(t)]
+            return [t for t in resp.json()["list"] if not only_regate_tools or find_biotools_regate_id(t)]
     except Exception as e:
         logger.error("Error listing tools from %s", registry_url)
         if logger.isEnabledFor(logging.DEBUG):
@@ -1326,15 +1373,45 @@ def get_elixir_tools_list(registry_url, tool_collectionID, tool_type=_RESOURCE_T
 
 
 def export_biotools_tools(config, filter=None):
+    # TODO: implement filtering
     logger.warn("Export tools from BioTools is not implemented yet")
-    return []
+    # NOTE: the 'only_regate_tools' constraint might be relaxed
+    biotools = get_elixir_tools_list(config.bioregistry_host, tool_type=_RESOURCE_TYPE.TOOL, only_regate_tools=True)
+    print(len(biotools))
+    print(json.dumps(biotools, indent=2))
+    with open("tools_list.json", "w") as out:
+        out.write(json.dumps(biotools, indent=2))
+
+    # init output folder
+    output_folder = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "tool")
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    result = []
+    for tool in biotools:
+        toolshed_info = find_biotools_toolshed_id(tool)
+        if toolshed_info:
+            data_json = {
+                "model_class": "Tool",
+                "name": tool["name"],
+                "version": tool["version"][0],
+                "panel_section_name": config.resourcename,
+                "tool_shed_repository": toolshed_info,
+            }
+            data_file = os.path.join(output_folder, "{}.json".format(tool["biotoolsID"]))
+            with open(data_file, "w") as out:
+                out.write(json.dumps(data_json, indent=2))
+                tool[REGATE_DATA_FILE] = data_file
+            result.append(tool)
+        else:
+            # TODO: generate tar.gz from dataURI and save it into the other folder
+            pass
+    return result
 
 
 def export_biotools_workflows(config, filter=None):
-    workflows = get_elixir_tools_list(config.bioregistry_host, config.resourcename, _RESOURCE_TYPE.WORKFLOW)
-    print(json.dumps(workflows, indent=2))
-    print("number of workflows: %d", len(workflows))
-
+    # TODO: implement filtering
+    workflows = get_elixir_tools_list(config.bioregistry_host, _RESOURCE_TYPE.WORKFLOW, config.resourcename, True)
     # init output folder
     output_folder = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "workflow")
     if not os.path.exists(output_folder):
