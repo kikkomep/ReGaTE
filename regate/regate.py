@@ -130,7 +130,7 @@ class Config(object):
             if options.command != _ALLOWED_COMMANDS.TEMPLATE.value:
                 if options.platform == _ALLOWED_SOURCES.GALAXY.value or "publish" in options:
                     self.galaxy_url = self.assign("galaxy_server", "galaxy_url", ismandatory=True)
-                    self.transient_instance = self.assign("galaxy_server", "transient_instance", ismandatory=True)
+                    self.transient_instance = self.assign("galaxy_server", "transient_instance", ismandatory=True, boolean=True)
                     self.tools_default = self.assign("galaxy_server", "tools_default", ismandatory=True)
                     self.contactName = self.assign("galaxy_server", "contactName", ismandatory=True)
                     self.contactUrl = self.assign("galaxy_server", "contactUrl", ismandatory=False)
