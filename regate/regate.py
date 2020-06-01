@@ -613,7 +613,7 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
     ##### Download GROUP ######################################################################################
     tool_archive = GalaxyPlatform.getInstance().get_galaxy_tool_wrapper_archive(galaxy_metadata['id'])
     if tool_archive:
-        mapping['download'].append(
+        mapping['download'].extend([
             {
                 'type': 'Tool wrapper (galaxy)',
                 'url': build_download_link(conf, tool_archive,
@@ -622,8 +622,17 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
                 'note': "Galaxy Tool tar.gz archive encoded as base64 dataURI on the 'data' URL parameter.",
                 'version': galaxy_metadata['version']
 
+            },
+            {
+                'type': 'Tool wrapper (galaxy)',
+                'url': build_download_link(conf, json.dumps(galaxy_metadata),
+                                           filename="{}.json".format(galaxy_metadata['id']),
+                                           mimetype="application/json"),
+                'note': "JSON representation of the Galaxy tool as base64 encoded data URI on the 'data' URL parameter.",
+                'version': galaxy_metadata['version']
+
             }
-        )
+        ])
     if not conf.transient_instance:
         mapping['download'].extend([
             {
@@ -633,7 +642,6 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
                 'version': galaxy_metadata['version']
             }
         ])
-    
 
     ##### Link GROUP ######################################################################################
     # Miscellaneous links for the software: e.g., repository, issue tracker, etc.
@@ -785,7 +793,6 @@ def map_workflow(galaxy_metadata, conf, mapping_edam):
                 'version': galaxy_metadata['version']
             }
         ])
-
 
     result = copy.deepcopy(mapping)
     clean_dict(result)
