@@ -317,7 +317,7 @@ class GalaxyPlatform(object):
                 root = xml_config.getroot()
                 return {
                     'command': root.find("command").text,
-                    'help': root.find("help").text,
+                    'help': root.find("help").text if root.find("help") else "",
                 }
         finally:
             temp.close()
