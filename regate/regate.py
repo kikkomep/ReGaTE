@@ -605,7 +605,7 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
         mapping['otherID'].extend([
             {
                 'type': "biotoolsCURIE",
-                'value': "{}_{}_repos_{}_{}_{}".format(TOOLSHED_PREFIX_ID,toolshed['tool_shed'], toolshed['owner'], toolshed['name'], toolshed['name']),
+                'value': "{}_{}_{}_{}_{}".format(TOOLSHED_PREFIX_ID, toolshed['tool_shed'], toolshed['owner'], toolshed['name'], toolshed['name']),
                 'version': toolshed['changeset_revision']
             }
         ])
