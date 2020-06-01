@@ -625,11 +625,11 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
             }
         )
     if not conf.transient_instance:
-        mapping['link'].extend([
+        mapping['download'].extend([
             {
                 'type': 'Tool wrapper (galaxy)',
                 'url': urljoin(conf.galaxy_url, "{}/{}/{}".format('api/tools/', galaxy_metadata['id'], 'download')),
-                'note': "Tool name: {}. Description: {}".format(galaxy_metadata['name'], galaxy_metadata['description']),
+                'note': "Download {} tool from the Galaxy platform {}".format(galaxy_metadata['name'], conf.galaxy_url),
                 'version': galaxy_metadata['version']
             }
         ])
