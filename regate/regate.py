@@ -544,6 +544,10 @@ def build_download_link(config, data, filename="data", mimetype="application/jso
     )
 
 
+def build_biotool_id(conf, galaxy_metadata):
+    return build_tool_name(galaxy_metadata['id'], conf.prefix_toolname, conf.suffix_toolname)
+
+
 def map_tool(galaxy_metadata, conf, edam_mapping):
     """
     Extract informations from a galaxy json tool and return the general json in the biotools format
@@ -552,7 +556,7 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
     :return: biotools dictionary
     :rtype: dictionary
     """
-    tool_id = build_tool_name(galaxy_metadata['id'], conf.prefix_toolname, conf.suffix_toolname)
+    tool_id = build_biotool_id(conf, galaxy_metadata)
     mapping = {
         ##### SUMMARY GROUP #########################################################################################
         'name': build_tool_name(galaxy_metadata['name'], conf.prefix_toolname, conf.suffix_toolname),
