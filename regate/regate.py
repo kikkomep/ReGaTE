@@ -1405,6 +1405,7 @@ def decode_datafile_from_datauri(link, output_folder, write_datafile=True):
         toolshed_info = find_biotools_toolshed_id(tool)
         if toolshed_info:
             data_json = {
+                "id": tool["biotoolsID"],
                 "model_class": "Tool",
                 "name": tool["name"],
                 "version": tool["version"][0],
