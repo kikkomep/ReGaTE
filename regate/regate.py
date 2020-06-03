@@ -374,10 +374,10 @@ class GalaxyPlatform(object):
                     name=toolshed["name"],
                     owner=toolshed["owner"],
                     changeset_revision=toolshed["changeset_revision"],
-                    install_tool_dependencies=False, 
-                    install_repository_dependencies=False, 
-                    install_resolver_dependencies=False, 
-                    tool_panel_section_id=None, 
+                    install_tool_dependencies=False,
+                    install_repository_dependencies=False,
+                    install_resolver_dependencies=False,
+                    tool_panel_section_id=None,
                     new_tool_panel_section_label=data_json["panel_section_name"]
                 )
             else:
@@ -1333,7 +1333,7 @@ def find_biotools_toolshed_id(tool):
     return toolshed_id
 
 
-def get_elixir_tools_list(registry_url, tool_type=_RESOURCE_TYPE.TOOL,  tool_collectionID=None, only_regate_tools=False):
+def get_elixir_tools_list(registry_url, tools_list=None, tool_type=_RESOURCE_TYPE.TOOL,  tool_collectionID=None, only_regate_tools=False):
     try:
         resource_type = "Web application" if tool_type == _RESOURCE_TYPE.TOOL else "Workflow"
         res_url = urljoin(registry_url, '/api/tool')
@@ -1343,7 +1343,22 @@ def get_elixir_tools_list(registry_url, tool_type=_RESOURCE_TYPE.TOOL,  tool_col
         resp = requests.get(res_url, headers=_build_request_headers(), params=params)
         if resp.status_code == 200:
             # filter tools by otherID == biotools:regate_
-            return [t for t in resp.json()["list"] if not only_regate_tools or find_biotools_regate_id(t)]
+            tools = [t for t in resp.json()["list"] if not only_regate_tools or find_biotools_regate_id(t)]
+            tools_list = tools_list.split(',') if tools_list and isinstance(tools_list, str) else tools_list
+            if tools_list:
+                filtered_tools = []
+                tools_id = [t.lower() for t in tools_list]
+                for tid in tools_id:
+                    found = False
+                    for tool in tools:
+                        if tool["biotoolsID"].lower() == tid or tool["name"].lower() == tid:
+                            filtered_tools.append(tool)
+                            found = True
+                            break
+                    if not found:
+                        logger.error("Unable to find tool: %s", tid)
+                return filtered_tools
+            return tools
     except Exception as e:
         logger.error("Error listing tools from %s", registry_url)
         if logger.isEnabledFor(logging.DEBUG):
@@ -1371,9 +1386,6 @@ def get_elixir_tools_list(registry_url, tool_type=_RESOURCE_TYPE.TOOL,  tool_col
 #                 logger.exception(e)
 
 
-def export_biotools_tools(config, filter=None):
-    # TODO: implement filtering
-    logger.warn("Export tools from BioTools is not implemented yet")
 def decode_datafile_from_datauri(link, output_folder, write_datafile=True):
     unuri = urllib.parse.urlparse(link)
     qparams = urllib.parse.parse_qs(unuri.query)
@@ -1387,10 +1399,12 @@ def decode_datafile_from_datauri(link, output_folder, write_datafile=True):
             out.write(data)
     return datafile
 
+
+def export_biotools_tools(config, tools_filter=None):
     # NOTE: the 'only_regate_tools' constraint might be relaxed
-    biotools = get_elixir_tools_list(config.bioregistry_host, tool_type=_RESOURCE_TYPE.TOOL, only_regate_tools=True)
-    print(len(biotools))
-    print(json.dumps(biotools, indent=2))
+    biotools = get_elixir_tools_list(config.bioregistry_host,
+                                     tools_list=tools_filter.split(',') if tools_filter else None,
+                                     tool_type=_RESOURCE_TYPE.TOOL, only_regate_tools=True)
     with open("tools_list.json", "w") as out:
         out.write(json.dumps(biotools, indent=2))
 
@@ -1436,9 +1450,12 @@ def decode_datafile_from_datauri(link, output_folder, write_datafile=True):
     return result
 
 
-def export_biotools_workflows(config, filter=None):
+def export_biotools_workflows(config, workflows_filter=None):
     # TODO: implement filtering
-    workflows = get_elixir_tools_list(config.bioregistry_host, _RESOURCE_TYPE.WORKFLOW, config.resourcename, True)
+    workflows = get_elixir_tools_list(config.bioregistry_host,
+                                      tools_list=workflows_filter.split(',') if workflows_filter else None,
+                                      tool_type=_RESOURCE_TYPE.WORKFLOW,
+                                      tool_collectionID=None, only_regate_tools=True)
     # init output folder
     output_folder = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "workflow")
     if not os.path.exists(output_folder):
