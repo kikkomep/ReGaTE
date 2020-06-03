@@ -1375,6 +1375,19 @@ def get_elixir_tools_list(registry_url, tool_type=_RESOURCE_TYPE.TOOL,  tool_col
 def export_biotools_tools(config, filter=None):
     # TODO: implement filtering
     logger.warn("Export tools from BioTools is not implemented yet")
+def decode_datafile_from_datauri(link, output_folder, write_datafile=True):
+    unuri = urllib.parse.urlparse(link)
+    qparams = urllib.parse.parse_qs(unuri.query)
+    filename = qparams['filename'][0]
+    dataURI = qparams['data'][0]
+    header, encoded = dataURI.split(",", 1)
+    data = base64.b64decode(encoded).decode('utf-8')
+    datafile = os.path.join(output_folder, filename)
+    if write_datafile:
+        with open(datafile, "w") as out:
+            out.write(data)
+    return datafile
+
     # NOTE: the 'only_regate_tools' constraint might be relaxed
     biotools = get_elixir_tools_list(config.bioregistry_host, tool_type=_RESOURCE_TYPE.TOOL, only_regate_tools=True)
     print(len(biotools))
@@ -1404,8 +1417,22 @@ def export_biotools_tools(config, filter=None):
                 tool[REGATE_DATA_FILE] = data_file
             result.append(tool)
         else:
-            # TODO: generate tar.gz from dataURI and save it into the other folder
-            pass
+            tool_folder = os.path_join(output_folder, "not_imported", tool["name"])
+            os.makedirs(tool_folder, exist_ok=True)
+            try:
+                links = [link["url"] for link in tool["download"]
+                         if link["url"].startswith(config.data_uri_prefix)]
+                if len(links) == 0:
+                    raise Exception("No DataURI link found")
+                elif len(links) > 1:
+                    raise Exception("More than one DataURI link found. We support one version only")
+                for link in links:
+                    workflow[REGATE_DATA_FILE] = decode_datafile_from_datauri(link, output_folder=tool_folder, write_datafile=True)
+                # result.append(tool)
+            except Exception as e:
+                logger.error("Unable to extract Galaxy workflow definition from BioTools")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
     return result
 
 
@@ -1426,16 +1453,8 @@ def export_biotools_workflows(config, filter=None):
                 raise Exception("No DataURI link found")
             elif len(links) > 1:
                 raise Exception("More than one DataURI link found. We support one version only")
-            unuri = urllib.parse.urlparse(links[0])
-            qparams = urllib.parse.parse_qs(unuri.query)
-            filename = qparams['filename'][0]
-            dataURI = qparams['data'][0]
-            header, encoded = dataURI.split(",", 1)
-            data = base64.b64decode(encoded).decode('utf-8')
-            data_file = os.path.join(output_folder, filename)
-            with open(data_file, "w") as out:
-                out.write(data)
-                workflow[REGATE_DATA_FILE] = data_file
+            for link in links:
+                workflow[REGATE_DATA_FILE] = decode_datafile_from_datauri(link, output_folder=output_folder, write_datafile=True)
             result.append(workflow)
         except Exception as e:
             logger.error("Unable to extract Galaxy workflow definition from BioTools")
