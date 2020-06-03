@@ -301,14 +301,13 @@ class GalaxyPlatform(object):
                     else tool_metadata['name']))
                 files = [f for f in tar_archive.getnames()]
                 logger.debug("List of files: %r", files)
-                print(json.dumps(tool_metadata, indent=2))
                 if len(files) == 0:
-                    logger.warn("No file found on the archive of the galaxy tool wrapper '%s'!", tool_metadata['id'])
+                    logger.debug("No file found on the archive of the galaxy tool wrapper '%s'!", tool_metadata['id'])
                     return None
                 elif len(files) > 1:
                     files = [f for f in tar_archive.getnames() if filename_pattern.match(f)]
                     if len(files) == 0 or len(files) > 1:
-                        logger.warn("Unable to detect the wrapper config file for tool '%s'", tool_metadata['id'])
+                        logger.debug("Unable to detect the wrapper config file for tool '%s'", tool_metadata['id'])
                         logger.debug("Files %r (%r)", files, filename_pattern.pattern)
                         return None
                 tar_archive.extractall(path=temp_dir.name)
@@ -352,8 +351,6 @@ class GalaxyPlatform(object):
                             str(wf['id'])), exc_info=True)
         return workflows_metadata
 
-    
-    
     def import_workflow(self, workflow_filename):
         try:
             with open(workflow_filename) as data_file:
@@ -363,8 +360,6 @@ class GalaxyPlatform(object):
             logger.error("Galaxy import error for workflow in the '%s' JSON file", workflow_filename)
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
-    
-
 
     def import_tool(self, tool_or_filename):
         try:
