@@ -330,6 +330,21 @@ class GalaxyPlatform(object):
             temp.close()
             temp_dir.cleanup()
 
+    def get_workflow(self, workflow_id, export_format=False):
+        try:
+            workflows = self.api.workflows.get_workflows()
+            for wf in workflows:
+                if wf['latest_workflow_uuid'] == workflow_id:
+                    if wf and export_format:
+                        wf = self.api.workflows.export_workflow_dict(wf['id'])
+                    return wf
+            return None
+        except ConnectionError as e:
+            logger.error("Error during connection with exposed API method for workflow {0}".format(workflow_id, exc_info=True))
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+            return None
+
     def get_workflows(self, ids=None, ignore=None):
         workflows_metadata = []
         # build the list of workflows to export
