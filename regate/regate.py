@@ -102,7 +102,7 @@ class _ALLOWED_SOURCES (Enum):
 
 class _ALLOWED_COMMANDS (Enum):
     EXPORT = "export"
-    PUBLISH = "publish"
+    PUSH = "push"
     TEMPLATE = "template"
 
     @staticmethod
@@ -136,7 +136,7 @@ class Config(object):
         self.api_key = self.assign("galaxy_server", "api_key", ismandatory=True)
         if script == "regate":
             if options.command != _ALLOWED_COMMANDS.TEMPLATE.value:
-                if options.platform == _ALLOWED_SOURCES.GALAXY.value or "publish" in options:
+                if options.platform == _ALLOWED_SOURCES.GALAXY.value or "push" in options:
                     self.galaxy_url = self.assign("galaxy_server", "galaxy_url", ismandatory=True)
                     self.transient_instance = self.assign("galaxy_server", "transient_instance", ismandatory=True, boolean=True)
                     self.tools_default = self.assign("galaxy_server", "tools_default", ismandatory=True)
@@ -147,7 +147,7 @@ class Config(object):
                     self.contactTypeEntity = self.assign("galaxy_server", "contactTypeEntity", ismandatory=True)
                     self.contactTypeRole = self.assign("galaxy_server", "contactTypeRole", ismandatory=True)
 
-                if options.platform == _ALLOWED_SOURCES.BIOTOOLS.value or "publish" in options:
+                if options.platform == _ALLOWED_SOURCES.BIOTOOLS.value or "push" in options:
                     self.login = self.assign("regate_specific_section", "login", ismandatory=True,
                                              message="login option is mandatory to push resources to Elixir")
                     self.bioregistry_host = self.assign("regate_specific_section", "bioregistry_host", ismandatory=True,
@@ -1589,7 +1589,7 @@ def export_from_biotools(options):
         wok, workflows_failures = export_biotools_workflows(config, options.filter if "filter" in options else None)
         workflows.extend(wok)
     # Publish tool/workflows
-    if options.publish:
+    if options.push:
         # Build list of BioTools JSON files to publish
         galaxy_json_files = [resource[REGATE_DATA_FILE] for resource in tools] + \
                             [resource[REGATE_DATA_FILE] for resource in workflows]
@@ -1645,12 +1645,12 @@ def publish_to_galaxy(options):
     push_to_galaxy(config, galaxy_json_files, check_exists=True)
 
 
-def publish(args):
+def push(args):
     logger.debug("cmd: %s", args.command)
     if args.platform == "biotools":
-        publish_to_bioblend(args)
-    if args.platform == "galaxy":
-        publish_to_galaxy(args)
+        push_to_target_platform(args)
+    elif args.platform == "galaxy":
+        push_to_target_platform(args)
     else:
         logger.error("Unsupported target platform '%s'", args.platform)
 
@@ -1684,23 +1684,23 @@ def build_cli_parser():
     export_parser.add_argument("--from", dest="platform", choices=[o.value for o in _ALLOWED_SOURCES],
                                required=True,
                                help="source platform for exporting tools and/or workflows")
-    export_parser.add_argument("--publish", action='store_true', help="Publish tools and/or workflows")
+    export_parser.add_argument("--push", action='store_true', help="Push tools and/or workflows")
     export_parser.set_defaults(command='export')
     export_parser.set_defaults(resource='all')
 
     # publish command
-    publish_parser = sp.add_parser("publish",
+    publish_parser = sp.add_parser("push",
                                    help="publish just exported tools and/or workflows",
                                    formatter_class=lambda prog: argparse.HelpFormatter(prog, width=140, max_help_position=100))
     publish_parser.add_argument("--to", dest="platform", choices=[o.value for o in _ALLOWED_SOURCES], required=True,
                                 help="target platform for publishing tools and/or workflows")
-    publish_parser.set_defaults(command='publish')
+    publish_parser.set_defaults(command='push')
     publish_parser.set_defaults(resource='all')
 
     # add resource_parser as subparser of the {export,publish}_pasers
     for parent_parser in [export_parser, publish_parser]:
         resource_subparsers = parent_parser.add_subparsers(
-            title="types of resource to {}".format("export" if parent_parser == export_parser else "publish"))
+            title="types of resource to {}".format("export" if parent_parser == export_parser else "push"))
         all_res_parser = resource_subparsers.add_parser("all", help="tools and workflows (default)",
                                                         formatter_class=lambda prog: argparse.HelpFormatter(prog, width=140, max_help_position=100))
         all_res_parser.set_defaults(resource='all')
