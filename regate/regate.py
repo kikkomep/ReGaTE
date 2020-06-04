@@ -38,6 +38,7 @@ from urllib.parse import urljoin
 from Cheetah.Template import Template
 from bioblend.galaxy.client import ConnectionError
 from bioblend.galaxy import GalaxyInstance as _GalaxyInstance
+from bioblend.galaxy.objects import GalaxyInstance as _GalaxyObjectInstance
 from logging.handlers import RotatingFileHandler
 from PyInquirer import style_from_dict, Token, prompt, Separator
 
@@ -240,6 +241,7 @@ class GalaxyPlatform(object):
 
     def configure(self, galaxy_url, galaxy_api_key):
         self._galaxy_instance = _GalaxyInstance(galaxy_url, key=galaxy_api_key)
+        self._galaxy_instance_obj = _GalaxyObjectInstance(galaxy_url, galaxy_api_key)
         self._galaxy_instance.verify = False
 
     def get_tool(self, id):
@@ -335,13 +337,17 @@ class GalaxyPlatform(object):
             temp.close()
             temp_dir.cleanup()
 
-    def get_workflow(self, workflow_id, export_format=False):
+    def get_workflow(self, workflow_id, details=False, step_tools_details=False):
         try:
             workflows = self.api.workflows.get_workflows()
             for wf in workflows:
+                wf['uuid'] = wf['latest_workflow_uuid']
                 if wf['latest_workflow_uuid'] == workflow_id:
-                    if wf and export_format:
-                        wf = self.api.workflows.export_workflow_dict(wf['id'])
+                    if wf and details:
+                        if not step_tools_details:
+                            return self.api.workflows.export_workflow_dict(wf['id'])
+                        else:
+                            return self._load_workflow_details(wf['id'], load_io_details=step_tools_details)
                     return wf
             return None
         except ConnectionError as e:
@@ -350,7 +356,7 @@ class GalaxyPlatform(object):
                 logger.exception(e)
             return None
 
-    def get_workflows(self, ids=None, ignore=None, details=False):
+    def get_workflows(self, ids=None, ignore=None, details=False, step_tools_details=False):
         workflows_metadata = []
         # build the list of workflows to export
         galaxy_workflows = None
@@ -375,13 +381,37 @@ class GalaxyPlatform(object):
                     if not details:
                         workflows_metadata.append(wf)
                     else:
-                        try:
-                            metadata = self.api.workflows.export_workflow_dict(wf['id'])
-                            workflows_metadata.append(metadata)
-                        except ConnectionError as e:
-                            logger.error("Error during connection with exposed API method for workflow {0}".format(
-                                str(wf['id'])), exc_info=True)
+                        workflows_metadata.append(self._load_workflow_details(wf['id'], load_io_details=step_tools_details))
         return workflows_metadata
+
+    def _load_workflow_details(self, workflow_id, load_io_details=True):
+        workflow = None
+        try:
+            workflow_obj = self._galaxy_instance_obj.workflows.get(workflow_id)
+            workflow_metadata = workflow_obj.export()
+            if load_io_details:
+                workflow_io_details = [
+                    ('inputs', list(workflow_obj.inputs)),
+                    ('outputs', workflow_obj.sink_ids),
+                    ('operations', set(workflow_obj.steps) - workflow_obj.sink_ids - set(workflow_obj.inputs))
+                ]
+                for collection, _ in workflow_io_details:
+                    if not collection in workflow_metadata:
+                        workflow_metadata[collection] = []
+                for collection, steps in workflow_io_details:
+                    for step in steps:
+                        step_metadata = workflow_obj.steps[step]
+                        if step_metadata.tool_id:
+                            tool_step = self.get_tool(step_metadata.tool_id)
+                            if tool_step:
+                                workflow_metadata[collection].append(tool_step)
+            return workflow_metadata
+        except ConnectionError as e:
+            logger.error("Error during connection with exposed API method for workflow {0}".format(workflow_id), exc_info=True)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+            sys.exit(1)
+        return workflow_metadata
 
     def import_workflow(self, workflow_or_filename):
         try:
@@ -710,14 +740,17 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
 
 
 def map_workflow_tools(galaxy_metadata, config, mapping_edam):
-    tools = {}
-    for step_index, step in galaxy_metadata["steps"].items():
-        if step['type'] == 'tool':
-            galaxy_tool_metadata = GalaxyPlatform.getInstance().get_tool(step['tool_id'])
-            if not galaxy_tool_metadata:
-                raise Exception("Unable to retrieve metadata of tool '%s'", step['tool_id'])
-            tools[step['tool_id']] = map_tool(galaxy_tool_metadata, config, mapping_edam)
-    return tools
+    try:
+        tools = {}
+        tools_steps = galaxy_metadata["inputs"] + galaxy_metadata["operations"] + galaxy_metadata["outputs"]
+        for tool in tools_steps:
+            print(tool)
+            tools[tool['id']] = map_tool(tool, config, mapping_edam)
+        return tools
+    except Exception as e:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
+        return None
 
 
 def map_workflow(galaxy_metadata, conf, mapping_edam):
@@ -961,7 +994,7 @@ def inputs_extract(inputs_json, mapping_edam):
             inputs_extract_conditional(dictinp)
         elif dictinp['type'] == "repeat":
             inputs_extract_repeat(dictinp)
-        elif dictinp["type"] in ["data", "datacollection"]:
+        elif dictinp["type"] in ["data", "datacollection", "data_collection_input"]:
             inputs_extract_data(dictinp)
     # if any([len(data['dataType'])==0 or len(data['dataFormat'])==0 for data in listdata]):
     #    logger.warning("data/formats mapping not found for inputs_json:" + str(inputs_json))
@@ -1343,10 +1376,13 @@ def export_galaxy_workflows(config, workflows_filter=None):
             workflows_metadata = [w for k, w in workflows.items() if k in answers["workflows"]]
     # exported workflows
     # TODO: add ignore list for workflows, ignore=config.tools_default)
+    print("> Loading Galaxy workflows... ", end='', flush=True)
     if not workflows_metadata:
-        print("> Loading list of Galaxy workflows... ", end='', flush=True)
-        workflows_metadata = GalaxyPlatform.getInstance().get_workflows(ids=workflows_filter, details=True)
-        print("DONE")
+        workflows_metadata = GalaxyPlatform.getInstance().get_workflows(ids=workflows_filter, details=True, step_tools_details=True)
+    else:
+        workflows_metadata = GalaxyPlatform.getInstance().get_workflows(
+            ids=[w['uuid'] for w in workflows_metadata], details=True, step_tools_details=True)
+    print("DONE")
     # Generate BioTools files for both tools and workflows
     biotools_metadata = build_biotools_files(config, type="workflow", galaxy_metadata=workflows_metadata)
     return biotools_metadata
@@ -1495,10 +1531,10 @@ def _push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
             print("   - Importing {} (vers.{})... ".format(resource["name"], resource["version"]), end='', flush=True)
             try:
                 if check_exists and gi.get_tool(resource['id']):
-                # if check_exists and \
-                #     len([t for t in existing_tools
-                #          if t['name'] == resource['name'] and
-                #          t['version'] == resource['version']]) > 0:
+                    # if check_exists and \
+                    #     len([t for t in existing_tools
+                    #          if t['name'] == resource['name'] and
+                    #          t['version'] == resource['version']]) > 0:
                     logger.info("Tool %s [ver. %s] already exists", resource['name'], resource['version'])
                     print("EXISTS")
                     continue
@@ -1522,10 +1558,10 @@ def _push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
             print("   - Importing {} (vers.{})... ".format(resource["name"], resource["version"]), end='', flush=True)
             try:
                 if check_exists and gi.get_workflow(resource['uuid']):
-                # if check_exists and \
-                #     len([w for w in existing_workflows
-                #          if w['name'] == resource['name'] and
-                #          w['version'] == resource['version']]) > 0:
+                    # if check_exists and \
+                    #     len([w for w in existing_workflows
+                    #          if w['name'] == resource['name'] and
+                    #          w['version'] == resource['version']]) > 0:
                     logger.info("Workflow %s [ver. %s] already exists", resource['name'], resource['version'])
                     print("EXISTS")
                     continue
