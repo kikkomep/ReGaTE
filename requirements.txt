@@ -7,3 +7,5 @@ configparser==5.0.0
 bioblend==0.13.0
 lxml==4.5.0
 wheel==0.34.2
+prompt_toolkit==1.0.14
+PyInquirer==1.0.3

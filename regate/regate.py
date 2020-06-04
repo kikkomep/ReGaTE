@@ -39,6 +39,7 @@ from Cheetah.Template import Template
 from bioblend.galaxy.client import ConnectionError
 from bioblend.galaxy import GalaxyInstance as _GalaxyInstance
 from logging.handlers import RotatingFileHandler
+from PyInquirer import style_from_dict, Token, prompt, Separator
 
 logger = logging.getLogger()
 
@@ -171,6 +172,7 @@ class Config(object):
             self.yaml_file = self.assign("regate_specific_section", "yaml_file", ismandatory=False)
             self.xmltemplate = self.assign("regate_specific_section", "xmltemplate", ismandatory=False)
             self.xsdbiotools = self.assign("regate_specific_section", "xsdbiotools", ismandatory=False)
+            self.no_interactive = options.no_interactive
 
         if script == "remag":
             self.edam_file = self.assign("remag_specific_section", "edam_file", ismandatory=True)
@@ -1038,9 +1040,19 @@ def auth(login, host, ssl_verify):
     """
     key = None
     while key is None:
-        password = getpass.getpass(prompt="  => password: ")
+        #password = getpass.getpass(prompt="  => password: ")
+        print("")
+        questions = [
+            {
+                'type': 'password',
+                'qmark': ">",
+                'message': "Enter the password for the BioTools user '{}':".format(login),
+                'name': 'password'
+            }
+        ]
+        answers = prompt(questions, style=custom_style_2)
         url = host + '/api/rest-auth/login/'
-        resp = requests.post(url, '{{"username": "{0}","password": "{1}"}}'.format(login, password),
+        resp = requests.post(url, '{{"username": "{0}","password": "{1}"}}'.format(login, answers["password"]),
                              headers=_build_request_headers(), verify=ssl_verify)
         key = resp.json().get('key')
     return key
@@ -1072,7 +1084,7 @@ def remove_existing_elixir_tool_version(registry_url, token, tool_id, tool_versi
         logger.error("Error removing resource {0}".format(tool_id), exc_info=True)
 
 
-def push_to_elix(login, host, ssl_verify, biotools_json_files, resourcename, xsd=None):
+def _push_to_elix(login, host, ssl_verify, biotools_json_data_list, resourcename, xsd=None):
     """
     :param login:
     :param tool_dir:
@@ -1082,7 +1094,6 @@ def push_to_elix(login, host, ssl_verify, biotools_json_files, resourcename, xsd
     ko_cnt = 0
 
     # Get Auth Token
-    print("\n> Provide password for the BioTools user '%s'" % login)
     logger.debug("authenticating...")
     token = auth(login, host, ssl_verify)
     logger.debug("authentication ok")
@@ -1090,20 +1101,25 @@ def push_to_elix(login, host, ssl_verify, biotools_json_files, resourcename, xsd
     print("\n> Importing tools/workflows into the BioTools platform...")
 
     # POST BioTool JSON files
-    for jsonfile in biotools_json_files:
-        json_string = open(jsonfile, 'r').read()
-        json_data = json.loads(json_string)
-        print("  - Importing {} (id.{}, vers.{})... ".format(json_data['name'], json_data['biotoolsID'], json_data['version'][0]), end='', flush=True)
+    for json_data in biotools_json_data_list:
+        if isinstance(json_data, str) and os.path.isfile(json_data):
+            with open(json_data, 'r') as jsonfile:
+                json_string = jsonfile.read()
+                json_data = json.loads(json_string)
+        else:
+            json_string = json.dumps(json_data)
+        print("  - Importing {} (id.{}, vers.{})... ".format(json_data['name'],
+                                                             json_data['biotoolsID'], json_data['version'][0]), end='', flush=True)
         # TODO: replace removal with a proper upgrade
         remove_existing_elixir_tool_version(host, token, json_data['biotoolsID'], json_data['version'][0], resourcename)
         url = host + "/api/tool"
         resp = requests.post(url, json_string, headers=_build_request_headers(token), verify=ssl_verify)
         if resp.status_code == 201:
-            logger.debug("{0} ok".format(os.path.basename(jsonfile)))
+            logger.debug("{0} ok".format(json_data["name"]))
             ok_cnt += 1
             print("DONE")
         else:
-            logger.error("{0} ko, error: {1}".format(os.path.basename(jsonfile), resp.text))
+            logger.error("{0} ko, error: {1}".format(json_data["name"], resp.text))
             ko_cnt += 1
             print("ERROR")
     logger.info("import finished, ok={0}, ko={1}".format(ok_cnt, ko_cnt))
@@ -1192,10 +1208,11 @@ def build_biotools_files(conf, type, galaxy_metadata):
 
     # write tools
     mappings = []
-    print("> Converting {}s into the BioTools format...".format(type))
+    print("\n> Converting {}s into the BioTools format...".format(type))
     for metadata in galaxy_metadata:
         try:
-            print("   - {} {} (id.{}, ver.{})...".format(type, metadata["name"], metadata['id' if type == "tool" else "uuid"], metadata["version"]), end='', flush=True)
+            print("   - {} {} (id.{}, ver.{})...".format(type,
+                                                         metadata["name"], metadata['id' if type == "tool" else "uuid"], metadata["version"]), end='', flush=True)
             biotools_metadata = map_tool(metadata, conf, mapping_edam) if type == "tool" else map_workflow(metadata, conf, mapping_edam)
             file_name = build_filename(metadata['id' if type == "tool" else "uuid"], metadata['version'])
             write_json_files(file_name, biotools_metadata, tools_dir)
@@ -1251,23 +1268,76 @@ def load_edam_dict(config):
 
 
 def export_galaxy_tools(config, tools_filter=None):
-    print("\nConverting Galaxy tools into a BioTools format...")
-    print("> Loading list of Galaxy tools... ", end='', flush=True)
+    galaxy_metadata = None
+    if not tools_filter and not config.no_interactive:
+        questions = [
+            {
+                'type': 'confirm',
+                'name': "disable_filter",
+                'message': 'Would you like to export all tools?',
+                'default': True
+            }
+        ]
+        answers = prompt(questions, style=custom_style_2)
+        if not answers["disable_filter"]:
+            print("> Loading list of Galaxy tools... ", end='', flush=True)
+            # Build the list of tools to export
+            tools = {"{} (id.{}, ver.{})".format(w['name'], w['id'], w['version']): w for w in GalaxyPlatform.getInstance().get_tools()}
+            print("DONE")
+            questions = [
+                {
+                    'type': 'checkbox',
+                    'message': 'Select tools',
+                    'name': 'tools',
+                    'choices': [{'name': w} for w in list(tools)],
+                }
+            ]
+            answers = prompt(questions, style=custom_style_2)
+            galaxy_metadata = [t for k, t in tools.items() if k in answers["tools"]]
     # Build the list of tools to export
-    galaxy_metadata = GalaxyPlatform.getInstance().get_tools(ids=tools_filter, ignore=config.tools_default)
-    print("DONE")
+    if not galaxy_metadata:
+        print("> Loading list of Galaxy tools... ", end='', flush=True)
+        galaxy_metadata = GalaxyPlatform.getInstance().get_tools(ids=tools_filter, ignore=config.tools_default)
+        print("DONE")
     # Generate BioTools files for both tools
     biotools_metadata = build_biotools_files(config, type="tool", galaxy_metadata=galaxy_metadata)
     return biotools_metadata
 
 
 def export_galaxy_workflows(config, workflows_filter=None):
-    print("\nConverting Galaxy workflows into a BioTools format...")
-    print("> Loading list of Galaxy workflows... ", end='', flush=True)
+    workflows_metadata = None
+    if not workflows_filter and not config.no_interactive:
+        questions = [
+            {
+                'type': 'confirm',
+                'name': "disable_filter",
+                'message': 'Would you like to export all workflows?',
+                'default': True
+            }
+        ]
+        answers = prompt(questions, style=custom_style_2)
+        if not answers["disable_filter"]:
+            print("> Loading list of Galaxy tools... ", end='', flush=True)
+            # Build the list of tools to export
+            workflows = {"{} (id.{}, ver.{})".format(w['name'], w['uuid'], w['version']): w
+                         for w in GalaxyPlatform.getInstance().get_workflows()}
+            print("DONE")
+            questions = [
+                {
+                    'type': 'checkbox',
+                    'message': 'Select workflows',
+                    'name': 'workflows',
+                    'choices': [{'name': w} for w in list(workflows)],
+                }
+            ]
+            answers = prompt(questions, style=custom_style_2)
+            workflows_metadata = [w for k, w in workflows.items() if k in answers["workflows"]]
     # exported workflows
     # TODO: add ignore list for workflows, ignore=config.tools_default)
-    workflows_metadata = GalaxyPlatform.getInstance().get_workflows(ids=workflows_filter)
-    print("DONE")
+    if not workflows_metadata:
+        print("> Loading list of Galaxy workflows... ", end='', flush=True)
+        workflows_metadata = GalaxyPlatform.getInstance().get_workflows(ids=workflows_filter)
+        print("DONE")
     # Generate BioTools files for both tools and workflows
     biotools_metadata = build_biotools_files(config, type="workflow", galaxy_metadata=workflows_metadata)
     return biotools_metadata
@@ -1280,14 +1350,14 @@ def export_from_galaxy(options):
     GalaxyPlatform.getInstance().configure(config.galaxy_url, config.api_key)
     # Export tools
     tools = []
-    if options.resource == "tools" or options.resource == "all":
+    if options.resource == _RESOURCE_TYPE.TOOL.value or options.resource == _RESOURCE_TYPE.ALL.value:
         tools.extend(export_galaxy_tools(config, options.filter if "filter" in options else None))
     # Export workflows
     workflows = []
-    if options.resource == "workflows" or options.resource == "all":
+    if options.resource == _RESOURCE_TYPE.WORKFLOW.value or options.resource == _RESOURCE_TYPE.ALL.value:
         workflows.extend(export_galaxy_workflows(config, options.filter if "filter" in options else None))
     # Publish tool/workflows
-    if options.publish:
+    if options.push:
         # Build list of BioTools JSON files to publish
         biotools_json_files = []
         biotools = tools.copy()
@@ -1304,7 +1374,7 @@ def export_from_galaxy(options):
         if len(biotools_json_files) == 0:
             print("No file to publish on the ELIXIR registry '{}'".format(config.bioregistry_host))
         else:
-            push_to_elix(config.login, config.bioregistry_host, config.ssl_verify, biotools_json_files, config.resourcename)
+            _push_to_elix(config.login, config.bioregistry_host, config.ssl_verify, biotools_json_files, config.resourcename)
 
 
 def find_biotools_regate_id(tool):
@@ -1362,93 +1432,141 @@ def get_elixir_tools_list(registry_url, tools_list=None, tool_type=_RESOURCE_TYP
     return None
 
 
-# def push_to_galaxy(config, galaxy_json_files):
-#     # configure the Galaxy instance
-#     gi = GalaxyPlatform.getInstance()
-#     gi.configure(config.galaxy_url, config.api_key)
-#     # setup tools paths
-#     for galaxy_json_file in galaxy_json_files:
-#         try:
-#             with open(galaxy_json_file) as f:
-#                 resource = json.load(f)
-#                 if resource.get('model_class', False) == "StoredWorkflow" \
-#                     or resource.get("a_galaxy_workflow", False) == "true":
-#                     gi.import_workflow(galaxy_json_file)
-#                 elif resource.get('model_class', False) == "Tool":
-#                     pass
-#         except Exception as e:
-#             logger.error("Galaxy import error for tool in the '%s' JSON file", galaxy_json_file)
-#             if logger.isEnabledFor(logging.DEBUG):
-#                 logger.exception(e)
-
-
 def decode_datafile_from_datauri(link, output_folder, write_datafile=True):
     unuri = urllib.parse.urlparse(link)
     qparams = urllib.parse.parse_qs(unuri.query)
     filename = qparams['filename'][0]
     dataURI = qparams['data'][0]
     header, encoded = dataURI.split(",", 1)
-    data = base64.b64decode(encoded).decode('utf-8')
+    header_parts = header.replace('data:', '').split(';')
+    is_json = header_parts[0] == 'application/json'
+    data = base64.b64decode(encoded).decode('utf-8') if is_json else base64.b64decode(encoded)
     datafile = os.path.join(output_folder, filename)
     if write_datafile:
-        with open(datafile, "w") as out:
+        with open(datafile, "w" if is_json else 'wb') as out:
             out.write(data)
-    return datafile
+    return filename, datafile
 
 
-def push_to_galaxy(config, galaxy_json_files, check_exists=True):
-    print("\nPublishing exported tools/workflows to Galaxy...")
-    print("> Loading Galaxy info... ")
+def _push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
     # Init Galaxy
     gi = GalaxyPlatform.getInstance()
     gi.configure(config.galaxy_url, config.api_key)
-    # Load Galaxy tools
-    # TODO: can we optimize this step ???
-    print("   - Galaxy tools... ", end='', flush=True)
-    tools = gi.get_tools() if check_exists else False
-    print("DONE")
-    # Load Galaxy workflows
-    # TODO: can we optimize this step ???
-    print("   - Galaxy workflows... ", end='', flush=True)
-    workflows = gi.get_workflows() if check_exists else False
-    print("DONE")
-    # Import all tools/workflows
-    print("> Importing tools into the Galaxy platform...")
-    for galaxy_json_file in galaxy_json_files:
-        with open(galaxy_json_file) as f:
-            resource = json.load(f)
-            print("  - Importing {} (vers.{})... ".format(resource["name"], resource["version"]), end='', flush=True)
+
+    # Preload all JSON files
+    tools = []
+    workflows = []
+    for galaxy_json_file in galaxy_json_data_list:
+        try:
+            resource = galaxy_json_file
+            print("Resource", resource)
+            if isinstance(galaxy_json_file, str) and os.path.isfile(galaxy_json_file):
+                with open(galaxy_json_file) as f:
+                    resource = json.load(f)
             if resource.get('model_class', False) == "StoredWorkflow" \
                     or resource.get("a_galaxy_workflow", False) == "true":
-                if check_exists and \
-                    len([w for w in workflows
-                            if w['name'] == resource['name'] and
-                            w['version'] == resource['version']]) > 0:
-                    logger.info("Workflow %s [ver. %s] already exists", resource['name'], resource['version'])
-                    print("EXISTS")
-                    continue
-                gi.import_workflow(galaxy_json_file)
-                print("DONE")
+                workflows.append(resource)
             elif resource.get('model_class', False) == "Tool":
-                if check_exists and \
-                    len([t for t in tools
-                            if t['name'] == resource['name'] and
-                            t['version'] == resource['version']]) > 0:
+                tools.append(resource)
+        except Exception as e:
+            logger.error("Error when loading file '%s'", galaxy_json_file)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+
+    # Load Galaxy tools
+    if len(tools) > 0:
+        # if check_exists:
+        #     print("> Loading existing Galaxy tools... ", end='', flush=True)
+        #     existing_tools = gi.get_tools()
+        #     print("DONE")
+
+        # Import all tools/workflows
+        print("> Pushing tools into the Galaxy platform...")
+        for resource in tools:
+            print("   - Importing {} (vers.{})... ".format(resource["name"], resource["version"]), end='', flush=True)
+            try:
+                if check_exists and gi.get_tool(resource['id']):
+                # if check_exists and \
+                #     len([t for t in existing_tools
+                #          if t['name'] == resource['name'] and
+                #          t['version'] == resource['version']]) > 0:
                     logger.info("Tool %s [ver. %s] already exists", resource['name'], resource['version'])
                     print("EXISTS")
                     continue
-                gi.import_tool(galaxy_json_file)
+                gi.import_tool(resource)
                 print("DONE")
+            except Exception as e:
+                print("ERROR")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
+
+    # Load Galaxy workflows
+    if len(workflows) > 0:
+        # if check_exists:
+        #     print("> Loading existing Galaxy workflows... ", end='', flush=True)
+        #     existing_workflows = gi.get_workflows()
+        #     print("DONE")
+
+        # Import all tools/workflows
+        print("> Pushing workflows into the Galaxy platform...")
+        for resource in workflows:
+            print("   - Importing {} (vers.{})... ".format(resource["name"], resource["version"]), end='', flush=True)
+            try:
+                if check_exists and gi.get_workflow(resource['uuid']):
+                # if check_exists and \
+                #     len([w for w in existing_workflows
+                #          if w['name'] == resource['name'] and
+                #          w['version'] == resource['version']]) > 0:
+                    logger.info("Workflow %s [ver. %s] already exists", resource['name'], resource['version'])
+                    print("EXISTS")
+                    continue
+                gi.import_workflow(resource)
+                print("DONE")
+            except Exception as e:
+                print("ERROR")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
 
 
 def export_biotools_tools(config, tools_filter=None):
-    print("\nConverting Biotools tools into a Galaxy format...")
-    # NOTE: the 'only_regate_tools' constraint might be relaxed
-    print("> Loading list of BioTools tools... ", end='')
-    biotools = get_elixir_tools_list(config.bioregistry_host,
-                                     tools_list=tools_filter.split(',') if tools_filter else None,
-                                     tool_type=_RESOURCE_TYPE.TOOL, only_regate_tools=True)
-    print("DONE")
+    biotools = None
+    if not tools_filter:
+        questions = [
+            {
+                'type': 'confirm',
+                'name': "disable_filter",
+                'message': 'Would you like to export all tools?',
+                'default': True
+            }
+        ]
+        answers = prompt(questions, style=custom_style_2)
+        if not answers["disable_filter"]:
+            print("> Loading list of Galaxy tools... ", end='', flush=True)
+            # Build the list of tools to export
+            tools = {"{} (id.{}, ver.{})".format(
+                w['name'], w['biotoolsID'], w['version'][0]): w
+                for w in get_elixir_tools_list(config.bioregistry_host,
+                                               tools_list=tools_filter.split(',') if tools_filter else None,
+                                               tool_type=_RESOURCE_TYPE.TOOL, only_regate_tools=True)}
+            print("DONE")
+            questions = [
+                {
+                    'type': 'checkbox',
+                    'message': 'Select tools',
+                    'name': 'tools',
+                    'choices': [{'name': w} for w in list(tools)],
+                }
+            ]
+            answers = prompt(questions, style=custom_style_2)
+            biotools = [t for k, t in tools.items() if k in answers["tools"]]
+    # Build the list of tools to export
+    if not biotools:
+        # NOTE: the 'only_regate_tools' constraint might be relaxed
+        print("> Loading list of BioTools tools... ", end='')
+        biotools = get_elixir_tools_list(config.bioregistry_host,
+                                         tools_list=tools_filter.split(',') if tools_filter else None,
+                                         tool_type=_RESOURCE_TYPE.TOOL, only_regate_tools=True)
+        print("DONE")
     # init output folder
     output_folder = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "tool")
     if not os.path.exists(output_folder):
@@ -1480,19 +1598,21 @@ def export_biotools_tools(config, tools_filter=None):
                 print("ERROR")
                 failure.append(tool)
                 if logger.isEnabledFor(logging.DEBUG):
-                    logger.exception(e)            
+                    logger.exception(e)
         else:
-            tool_folder = os.path_join(output_folder, "not_imported", tool["name"])
+            tool_folder = os.path.join(output_folder, "not_imported", tool["name"])
             os.makedirs(tool_folder, exist_ok=True)
             try:
                 links = [link["url"] for link in tool["download"]
                          if link["url"].startswith(config.data_uri_prefix)]
                 if len(links) == 0:
                     raise Exception("No DataURI link found")
-                elif len(links) > 1:
-                    raise Exception("More than one DataURI link found. We support one version only")
+                # elif len(links) > 1:
+                #     raise Exception("More than one DataURI link found. We support one version only")
                 for link in links:
-                    workflow[REGATE_DATA_FILE] = decode_datafile_from_datauri(link, output_folder=tool_folder, write_datafile=True)
+                    filename, datafile = decode_datafile_from_datauri(link, output_folder=tool_folder, write_datafile=True)
+                    if filename.endswith('json'):
+                        tool[REGATE_DATA_FILE] = datafile
                 success.append(tool)
                 print("DONE")
             except Exception as e:
@@ -1505,14 +1625,46 @@ def export_biotools_tools(config, tools_filter=None):
 
 
 def export_biotools_workflows(config, workflows_filter=None):
-    print("\nConverting Biotools workflows into a Galaxy format...")
-    # NOTE: the 'only_regate_tools' constraint might be relaxed
-    print("> Loading list of BioTools workflows... ", end='', flush=True)
-    workflows = get_elixir_tools_list(config.bioregistry_host,
-                                      tools_list=workflows_filter.split(',') if workflows_filter else None,
-                                      tool_type=_RESOURCE_TYPE.WORKFLOW,
-                                      tool_collectionID=None, only_regate_tools=True)
-    print("DONE")
+    workflows_metadata = None
+    if not workflows_filter:
+        questions = [
+            {
+                'type': 'confirm',
+                'name': "disable_filter",
+                'message': 'Would you like to export all workflows?',
+                'default': True
+            }
+        ]
+        answers = prompt(questions, style=custom_style_2)
+        if not answers["disable_filter"]:
+            print("> Loading list of Galaxy tools... ", end='', flush=True)
+            # Build the list of tools to export
+            workflows = {"{} (id.{}, ver.{})".format(w['name'], w['biotoolsID'], w['version'][0]): w
+                         for w in get_elixir_tools_list(config.bioregistry_host,
+                                                        tools_list=workflows_filter.split(',') if workflows_filter else None,
+                                                        tool_type=_RESOURCE_TYPE.WORKFLOW,
+                                                        tool_collectionID=None, only_regate_tools=True)}
+            print("DONE")
+            questions = [
+                {
+                    'type': 'checkbox',
+                    'message': 'Select workflows',
+                    'name': 'workflows',
+                    'choices': [{'name': w} for w in list(workflows)],
+                }
+            ]
+            answers = prompt(questions, style=custom_style_2)
+            workflows_metadata = [w for k, w in workflows.items() if k in answers["workflows"]]
+    if not workflows_metadata:
+        print("\nConverting Biotools workflows into a Galaxy format...")
+        # NOTE: the 'only_regate_tools' constraint might be relaxed
+        print("> Loading list of BioTools workflows... ", end='', flush=True)
+        workflows_metadata = get_elixir_tools_list(config.bioregistry_host,
+                                                   tools_list=workflows_filter.split(',') if workflows_filter else None,
+                                                   tool_type=_RESOURCE_TYPE.WORKFLOW,
+                                                   tool_collectionID=None, only_regate_tools=True)
+        print("DONE")
+
     # init output folder
     output_folder = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "workflow")
     if not os.path.exists(output_folder):
@@ -1521,7 +1673,7 @@ def export_biotools_workflows(config, workflows_filter=None):
     print("> Converting workflows:")
     success = []
     failure = []
-    for workflow in workflows:
+    for workflow in workflows_metadata:
         try:
             print("   - workflow {} (id.{}, ver.{})...".format(workflow["name"], workflow["biotoolsID"], workflow["version"][0]), end='')
             links = [link["url"] for link in workflow["download"]
@@ -1531,7 +1683,9 @@ def export_biotools_workflows(config, workflows_filter=None):
             elif len(links) > 1:
                 raise Exception("More than one DataURI link found. We support one version only")
             for link in links:
-                workflow[REGATE_DATA_FILE] = decode_datafile_from_datauri(link, output_folder=output_folder, write_datafile=True)
+                filename, datafile = decode_datafile_from_datauri(link, output_folder=output_folder, write_datafile=True)
+                if filename.endswith('json'):
+                    workflow[REGATE_DATA_FILE] = datafile
             success.append(workflow)
             print("DONE")
         except Exception as e:
@@ -1549,13 +1703,13 @@ def export_from_biotools(options):
     # Export tools
     tools = []
     tools_failures = None
-    if options.resource == "tools" or options.resource == "all":
+    if options.resource == _RESOURCE_TYPE.TOOL.value or options.resource == _RESOURCE_TYPE.ALL.value:
         tok, tools_failures = export_biotools_tools(config, options.filter if "filter" in options else None)
         tools.extend(tok)
     # Export workflows
     workflows = []
     workflows_failures = None
-    if options.resource == "workflows" or options.resource == "all":
+    if options.resource == _RESOURCE_TYPE.WORKFLOW.value or options.resource == _RESOURCE_TYPE.ALL.value:
         wok, workflows_failures = export_biotools_workflows(config, options.filter if "filter" in options else None)
         workflows.extend(wok)
     # Publish tool/workflows
@@ -1563,7 +1717,7 @@ def export_from_biotools(options):
         # Build list of BioTools JSON files to publish
         galaxy_json_files = [resource[REGATE_DATA_FILE] for resource in tools] + \
                             [resource[REGATE_DATA_FILE] for resource in workflows]
-        push_to_galaxy(config, galaxy_json_files, check_exists=True)
+        _push_to_galaxy(config, galaxy_json_files, check_exists=True)
 
 
 def export(args):
@@ -1576,43 +1730,85 @@ def export(args):
         raise Exception("Unsupported platform ''")
 
 
-def publish_to_bioblend(options):
+def push_to_target_platform(options):
     # Build list of BioTools JSON files to publish
     biotools_json_files = []
 
     # Load configuration file
     config = load_config(options)
 
-    tools_dir = get_resource_folder(config, _ALLOWED_SOURCES.BIOTOOLS.value, "tool")
-    if options.resource == "all" or options.resource == "tools":
-        biotools_json_files.extend([f for f in glob.glob(os.path.join(tools_dir, "*.json")) if os.path.isfile(f)])
+    tools_dir = get_resource_folder(config, options.platform, "tool")
+    workflows_dir = get_resource_folder(config, options.platform, "workflow")
+    resource_type_list = [t for t in _RESOURCE_TYPE.values() if t == options.resource or options.resource == _RESOURCE_TYPE.ALL.value]
 
-    workflows_dir = get_resource_folder(config, _ALLOWED_SOURCES.BIOTOOLS.value, "workflow")
-    if options.resource == "all" or options.resource == "workflows":
-        biotools_json_files.extend([f for f in glob.glob(os.path.join(workflows_dir, "*.json")) if os.path.isfile(f)])
+    for resource_type in resource_type_list:
+        is_tool = resource_type == _RESOURCE_TYPE.TOOL.value
+        is_galaxy_platform = options.platform == _ALLOWED_SOURCES.GALAXY.value
+        resource_dir = tools_dir if is_tool else workflows_dir
+        if options.filter:
+            tools_filter = options.filter.split(",")
+            biotools_json_files.extend([f for f in glob.glob(os.path.join(resource_dir, "*.json"))
+                                        if os.path.isfile(f) and os.path.splitext(os.path.basename(f))[0] in tools_filter])
+        elif not options.no_interactive:
+            tools_files = [f for f in glob.glob(os.path.join(resource_dir, "*.json")) if os.path.isfile(f)]
+            tools = {}
+            for tool_filename in tools_files:
+                with open(tool_filename) as tool_file:
+                    tool = json.load(tool_file)
+                    tools["{} (id.{}, ver.{})".format(
+                        tool["name"],
+                        tool["id" if is_galaxy_platform and is_tool else "uuid" if is_galaxy_platform else "biotoolsID"],
+                        tool["version"] if is_galaxy_platform else tool["version"][0]
+                    )] = tool
+            questions = [
+                {
+                    'type': 'confirm',
+                    'name': "disable_filter",
+                    'message': 'Would you like to push all {}?'.format("tools" if is_tool else "workflows"),
+                    'default': True
+                }
+            ]
+            answers = prompt(questions, style=custom_style_2)
+            if not answers["disable_filter"]:
+
+                questions = [
+                    {
+                        'type': 'checkbox',
+                        'message': 'Select {}'.format("tools" if is_tool else "workflows"),
+                        'name': 'tools',
+                        'choices': [{'name': t} for t in list(tools)],
+                    }
+                ]
+                answers = prompt(questions, style=custom_style_2)
+                biotools_json_files.extend([t for k, t in tools.items() if k in answers["tools"]])
+        else:
+            biotools_json_files.extend([f for f in glob.glob(os.path.join(resource_dir, "*.json")) if os.path.isfile(f)])
 
     if len(biotools_json_files) == 0:
         print("No file to publish on the ELIXIR registry '{}'".format(config.bioregistry_host))
     else:
-        push_to_elix(config.login, config.bioregistry_host, config.ssl_verify, biotools_json_files, config.resourcename)
+        if options.platform == _ALLOWED_SOURCES.BIOTOOLS.value:
+            _push_to_elix(config.login, config.bioregistry_host, config.ssl_verify, biotools_json_files, config.resourcename)
+        else:
+            _push_to_galaxy(config, biotools_json_files, check_exists=True)
 
 
-def publish_to_galaxy(options):
-    # Build list of BioTools JSON files to publish
-    galaxy_json_files = []
+# def push_to_galaxy(options):
+#     # Build list of BioTools JSON files to publish
+#     galaxy_json_files = []
 
-    # Load configuration file
-    config = load_config(options)
+#     # Load configuration file
+#     config = load_config(options)
 
-    tools_dir = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "tool")
-    if options.resource == "all" or options.resource == "tools":
-        galaxy_json_files.extend([f for f in glob.glob(os.path.join(tools_dir, "*.json")) if os.path.isfile(f)])
+#     tools_dir = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "tool")
+#     if options.resource == _RESOURCE_TYPE.TOOL.value or options.resource == _RESOURCE_TYPE.ALL.value:
+#         galaxy_json_files.extend([f for f in glob.glob(os.path.join(tools_dir, "*.json")) if os.path.isfile(f)])
 
-    workflows_dir = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "workflow")
-    if options.resource == "all" or options.resource == "workflows":
-        galaxy_json_files.extend([f for f in glob.glob(os.path.join(workflows_dir, "*.json")) if os.path.isfile(f)])
+#     workflows_dir = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "workflow")
+#     if options.resource == _RESOURCE_TYPE.WORKFLOW.value or options.resource == _RESOURCE_TYPE.ALL.value:
+#         galaxy_json_files.extend([f for f in glob.glob(os.path.join(workflows_dir, "*.json")) if os.path.isfile(f)])
 
-    push_to_galaxy(config, galaxy_json_files, check_exists=True)
+#     _push_to_galaxy(config, galaxy_json_files, check_exists=True)
 
 
 def push(args):
@@ -1633,8 +1829,9 @@ def template(args):
 def build_cli_parser():
     parser = argparse.ArgumentParser(description="Bridging Tool for Galaxy and BioTools Registry",
                                      formatter_class=lambda prog: argparse.HelpFormatter(prog, width=140, max_help_position=100))
-
     parser.add_argument("--debug", action="store_true", help="Enable DEBUG level")
+    parser.add_argument("-q, --no-interactive", dest="no_interactive",
+                        action="store_true", default=False, help="Disable interactive mode")
     parser.add_argument("--config_file",
                         help="configuration file for regate or remag",
                         default="regate.ini")
@@ -1676,14 +1873,102 @@ def build_cli_parser():
         all_res_parser.set_defaults(resource='all')
 
         tool_res_parser = resource_subparsers.add_parser("tools", help="tools")
-        tool_res_parser.set_defaults(resource='tools')
+        tool_res_parser.set_defaults(resource=_RESOURCE_TYPE.TOOL.value)
         tool_res_parser.add_argument("--filter", help="list of comma separated tool IDs")
 
         wf_res_parser = resource_subparsers.add_parser("workflows", help="workflows")
-        wf_res_parser.set_defaults(resource='workflows')
+        wf_res_parser.set_defaults(resource=_RESOURCE_TYPE.WORKFLOW.value)
         wf_res_parser.add_argument("--filter", help="list of comma separated workflow IDs")
 
     return parser
+
+
+custom_style_2 = style_from_dict({
+    Token.Separator: '#6C6C6C',
+    Token.QuestionMark: '#FF9D00 bold',
+    # Token.Selected: '',  # default
+    Token.Selected: '#5F819D',
+    Token.Pointer: '#FF9D00 bold',
+    Token.Instruction: '',  # default
+    Token.Answer: '#5F819D bold',
+    Token.Question: '',
+})
+
+
+class DynamicObject(dict):
+    def __init__(self, properties={}):
+        self.existing = "Still Here"
+        self.merge(properties)
+
+    def __getattr__(self, name):
+        return self.__dict__[name]
+
+    def __setattr__(self, name, value):
+        self.__dict__[name] = value
+
+    def __contains__(self, key):
+        return key in self.__dict__
+
+    def __str__(self):
+        return self.__dict__.__str__()
+
+    def __repr__(self):
+        return "{}({})".format(self.__class__.__name__, self.__dict__.__repr__())
+
+    def merge(self, properties):
+        if not isinstance(properties, dict):
+            raise TypeError("'properties' should be a dict")
+        for k, v in properties.items():
+            self.__setattr__(k, v)
+
+
+def wizard(args):
+
+    questions = [
+        {
+            'type': 'list',
+            'name': 'platform',
+            'message': 'Which platform do you want to export from?',
+            'choices': _ALLOWED_SOURCES.values()
+        },
+        {
+            'type': 'list',
+            'name': 'resource',
+            'message': 'Which type of resource?',
+            'choices': _RESOURCE_TYPE.values()
+        },
+        {
+            'type': 'confirm',
+            'name': "push",
+            'message': 'Would you like to immediately push to BioTools?',
+            'default': True,
+            'when': lambda answers: answers['platform'] == _ALLOWED_SOURCES.GALAXY.value
+        },
+        {
+            'type': 'confirm',
+            'name': "push",
+            'message': 'Would you like to immediately push to Galaxy?',
+            'default': True,
+            'when': lambda answers: answers['platform'] == _ALLOWED_SOURCES.BIOTOOLS.value
+        }
+    ]
+
+    answers = prompt(questions, style=custom_style_2)
+    options = DynamicObject(answers)
+    options.merge(vars(args))
+    options.command = "export"
+    logger.debug("Selected options: %s", options)
+
+    try:
+        sub_cmd = "export_from_{}".format(options.platform)
+        globals()[sub_cmd](options)
+    except KeyError as e:
+        logger.error("Command '%s' not found", options.command)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
+        sys.exit(1)
+    except KeyboardInterrupt as e:
+        logger.error("'%s' command interrupted by user", options.command)
 
 
 def run():
@@ -1703,6 +1988,8 @@ def run():
     try:
         if "command" in args:
             globals()[args.command](args)
+        elif not args.no_interactive:
+            wizard(args)
         else:
             parser.print_help()
             sys.exit(1)
