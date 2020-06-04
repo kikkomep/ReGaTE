@@ -374,13 +374,15 @@ class GalaxyPlatform(object):
                             str(wf['id'])), exc_info=True)
         return workflows_metadata
 
-    def import_workflow(self, workflow_filename):
+    def import_workflow(self, workflow_or_filename):
         try:
-            with open(workflow_filename) as data_file:
-                data_json = json.load(data_file)
-                self.api.workflows.import_workflow_dict(data_json, publish=True)
+            data_json = workflow_or_filename
+            if isinstance(workflow_or_filename, str) and os.path.isfile(workflow_or_filename):
+                with open(workflow_or_filename) as data_file:
+                    data_json = json.load(data_file)
+            self.api.workflows.import_workflow_dict(data_json, publish=True)
         except ConnectionError as e:
-            logger.error("Galaxy import error for workflow in the '%s' JSON file", workflow_filename)
+            logger.error("Galaxy import error for workflow in the '%s' JSON file", workflow_or_filename)
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
 
