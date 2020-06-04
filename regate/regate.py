@@ -1106,28 +1106,6 @@ def push_to_elix(login, host, ssl_verify, biotools_json_files, resourcename, xsd
             logger.error("{0} ko, error: {1}".format(os.path.basename(jsonfile), resp.text))
             ko_cnt += 1
             print("ERROR")
-#    if xsd:
-#        xsdparse = etree.parse(xsd)
-#    else:
-#        xsdparse = etree.parse(os.path.join('$PREFIXDATA', 'biotools.xsd'))
-#    schema = etree.XMLSchema(xsdparse)
-#    parser = etree.XMLParser(schema = schema)
-#    for xmlfile in glob.glob(os.path.join(tool_dir, "*.xml")):
-#        try:
-#            xmltree = etree.parse(xmlfile, parser)
-#        except etree.XMLSyntaxError, err:
-# print  "XML {0} is wrong formated, {1}".format(os.path.basename(xmlfile), err)
-#            continue
-#        url = host+"/api/tool"
-#        resp = requests.post(url, etree.tostring(xmltree, pretty_print=True),
-#                             headers={'Accept': 'application/json', 'Content-type': 'application/xml',
-#                                      'Authorization': 'Token {0}'.format(token)}, verify=ssl_verify)
-#        if resp.status_code == 201:
-#            print "{0} ok".format(os.path.basename(xmlfile))
-#            ok_cnt += 1
-#        else:
-#            print "{0} ko, error: {1}".format(os.path.basename(xmlfile), resp.text)
-#            ko_cnt += 1
     logger.info("import finished, ok={0}, ko={1}".format(ok_cnt, ko_cnt))
 
 
