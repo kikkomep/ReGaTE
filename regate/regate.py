@@ -258,11 +258,11 @@ class GalaxyPlatform(object):
                 logger.exception(e)
             return None
 
-    def get_tools(self, ids=None, ignore=None):
+    def get_tools(self, ids=None, ignore=None, details=False):
         tools_metadata = []
         # List of tools to retrieve
         galaxy_tools = None
-        if ids:
+        if ids and isinstance(ids, str):
             galaxy_tools = [{'id': tool_id} for tool_id in ids.split(",")]
         else:
             # Retrieve all available tools in the Galaxy platform
@@ -279,8 +279,11 @@ class GalaxyPlatform(object):
             # Load tools details
             for tool in galaxy_tools:
                 if not tool['id'] in ignore_list:
-                    tool = self.get_tool(tool['id'])
-                    if tool:
+                    if details:
+                        tool = self.get_tool(tool['id'])
+                        if tool:
+                            tools_metadata.append(tool)
+                    else:
                         tools_metadata.append(tool)
         return tools_metadata
 
@@ -347,11 +350,11 @@ class GalaxyPlatform(object):
                 logger.exception(e)
             return None
 
-    def get_workflows(self, ids=None, ignore=None):
+    def get_workflows(self, ids=None, ignore=None, details=False):
         workflows_metadata = []
         # build the list of workflows to export
         galaxy_workflows = None
-        if ids:
+        if ids and isinstance(ids, str):
             galaxy_workflows = [{'id': tool_id} for tool_id in ids.split(",")]
         else:
             # Retrieve all available tools in the Galaxy platform
@@ -367,13 +370,17 @@ class GalaxyPlatform(object):
             ignore_list = ignore.split(',') if ignore else []
             # Load workflow details
             for wf in galaxy_workflows:
-                if not wf['id'] in ignore_list:
-                    try:
-                        metadata = self.api.workflows.export_workflow_dict(wf['id'])
-                        workflows_metadata.append(metadata)
-                    except ConnectionError as e:
-                        logger.error("Error during connection with exposed API method for workflow {0}".format(
-                            str(wf['id'])), exc_info=True)
+                wf['uuid'] = wf['latest_workflow_uuid']
+                if not wf['uuid'] in ignore_list:
+                    if not details:
+                        workflows_metadata.append(wf)
+                    else:
+                        try:
+                            metadata = self.api.workflows.export_workflow_dict(wf['id'])
+                            workflows_metadata.append(metadata)
+                        except ConnectionError as e:
+                            logger.error("Error during connection with exposed API method for workflow {0}".format(
+                                str(wf['id'])), exc_info=True)
         return workflows_metadata
 
     def import_workflow(self, workflow_or_filename):
@@ -1295,10 +1302,12 @@ def export_galaxy_tools(config, tools_filter=None):
             answers = prompt(questions, style=custom_style_2)
             galaxy_metadata = [t for k, t in tools.items() if k in answers["tools"]]
     # Build the list of tools to export
+    print("> Loading Galaxy tools... ", end='', flush=True)
     if not galaxy_metadata:
-        print("> Loading list of Galaxy tools... ", end='', flush=True)
-        galaxy_metadata = GalaxyPlatform.getInstance().get_tools(ids=tools_filter, ignore=config.tools_default)
-        print("DONE")
+        galaxy_metadata = GalaxyPlatform.getInstance().get_tools(ids=tools_filter, ignore=config.tools_default, details=True)
+    else:
+        galaxy_metadata = GalaxyPlatform.getInstance().get_tools(ids=[t["id"] for t in galaxy_metadata], details=True)
+    print("DONE")
     # Generate BioTools files for both tools
     biotools_metadata = build_biotools_files(config, type="tool", galaxy_metadata=galaxy_metadata)
     return biotools_metadata
@@ -1317,10 +1326,10 @@ def export_galaxy_workflows(config, workflows_filter=None):
         ]
         answers = prompt(questions, style=custom_style_2)
         if not answers["disable_filter"]:
-            print("> Loading list of Galaxy tools... ", end='', flush=True)
+            print("> Loading list of Galaxy workflow... ", end='', flush=True)
             # Build the list of tools to export
             workflows = {"{} (id.{}, ver.{})".format(w['name'], w['uuid'], w['version']): w
-                         for w in GalaxyPlatform.getInstance().get_workflows()}
+                         for w in GalaxyPlatform.getInstance().get_workflows(details=True)}
             print("DONE")
             questions = [
                 {
@@ -1336,7 +1345,7 @@ def export_galaxy_workflows(config, workflows_filter=None):
     # TODO: add ignore list for workflows, ignore=config.tools_default)
     if not workflows_metadata:
         print("> Loading list of Galaxy workflows... ", end='', flush=True)
-        workflows_metadata = GalaxyPlatform.getInstance().get_workflows(ids=workflows_filter)
+        workflows_metadata = GalaxyPlatform.getInstance().get_workflows(ids=workflows_filter, details=True)
         print("DONE")
     # Generate BioTools files for both tools and workflows
     biotools_metadata = build_biotools_files(config, type="workflow", galaxy_metadata=workflows_metadata)
