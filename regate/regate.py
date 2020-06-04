@@ -412,31 +412,6 @@ class GalaxyPlatform(object):
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
 
-    def import_resources(self, galaxy_json_files, check_exists=True):
-        # TODO: can we optimize this step ???
-        tools = self.get_tools() if check_exists else False
-        workflows = self.get_workflows() if check_exists else False
-        for galaxy_json_file in galaxy_json_files:
-            with open(galaxy_json_file) as f:
-                resource = json.load(f)
-                if resource.get('model_class', False) == "StoredWorkflow" \
-                        or resource.get("a_galaxy_workflow", False) == "true":
-                    if check_exists and \
-                        len([w for w in workflows
-                             if w['name'] == resource['name'] and
-                             w['version'] == resource['version']]) > 0:
-                        logger.info("Workflow %s [ver. %s] already exists", resource['name'], resource['version'])
-                        continue
-                    self.import_workflow(galaxy_json_file)
-                elif resource.get('model_class', False) == "Tool":
-                    if check_exists and \
-                        len([t for t in tools
-                             if t['name'] == resource['name'] and
-                             t['version'] == resource['version']]) > 0:
-                        logger.info("Tool %s [ver. %s] already exists", resource['name'], resource['version'])
-                        continue
-                    self.import_tool(galaxy_json_file)
-
 
 def build_tool_name(tool_id, prefix, suffix):
     """
