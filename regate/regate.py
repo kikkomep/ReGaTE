@@ -82,19 +82,32 @@ DEFAULT_EDAM_TOPIC = {
 
 
 class _RESOURCE_TYPE(Enum):
+    ALL = "all"
     TOOL = "tool"
     WORKFLOW = "workflow"
+
+    @staticmethod
+    def values():
+        return [o.value for o in _RESOURCE_TYPE]
 
 
 class _ALLOWED_SOURCES (Enum):
     GALAXY = "galaxy"
     BIOTOOLS = "biotools"
 
+    @staticmethod
+    def values():
+        return [o.value for o in _ALLOWED_SOURCES]
+
 
 class _ALLOWED_COMMANDS (Enum):
     EXPORT = "export"
     PUBLISH = "publish"
     TEMPLATE = "template"
+
+    @staticmethod
+    def values():
+        return [o.value for o in _ALLOWED_COMMANDS]
 
 
 # loaded edam mapping dictionary
