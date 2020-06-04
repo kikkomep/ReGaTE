@@ -263,10 +263,10 @@ class GalaxyPlatform(object):
     def get_tools(self, ids=None, ignore=None, details=False):
         tools_metadata = []
         # List of tools to retrieve
-        galaxy_tools = None
+        galaxy_tools = ids
         if ids and isinstance(ids, str):
             galaxy_tools = [{'id': tool_id} for tool_id in ids.split(",")]
-        else:
+        elif not ids:
             # Retrieve all available tools in the Galaxy platform
             try:
                 galaxy_tools = self.api.tools.get_tools()
@@ -359,10 +359,10 @@ class GalaxyPlatform(object):
     def get_workflows(self, ids=None, ignore=None, details=False, step_tools_details=False):
         workflows_metadata = []
         # build the list of workflows to export
-        galaxy_workflows = None
+        galaxy_workflows = ids
         if ids and isinstance(ids, str):
-            galaxy_workflows = [{'id': tool_id} for tool_id in ids.split(",")]
-        else:
+            galaxy_workflows = [{'uuid': workflow_id} for workflow_id in ids.split(",")]
+        elif not ids:
             # Retrieve all available tools in the Galaxy platform
             try:
                 galaxy_workflows = self.api.workflows.get_workflows()
@@ -376,18 +376,29 @@ class GalaxyPlatform(object):
             ignore_list = ignore.split(',') if ignore else []
             # Load workflow details
             for wf in galaxy_workflows:
-                wf['uuid'] = wf['latest_workflow_uuid']
+                if not 'uuid' in wf and 'latest_workflow_uuid' in wf:
+                    wf['uuid'] = wf['latest_workflow_uuid']
                 if not wf['uuid'] in ignore_list:
                     if not details:
                         workflows_metadata.append(wf)
                     else:
-                        workflows_metadata.append(self._load_workflow_details(wf['id'], load_io_details=step_tools_details))
+                        workflow_metadata = self._load_workflow_details(wf['uuid'], load_io_details=step_tools_details)
+                        if workflow_metadata:
+                            workflows_metadata.append(workflow_metadata)
         return workflows_metadata
 
-    def _load_workflow_details(self, workflow_id, load_io_details=True):
-        workflow = None
+    def _load_workflow_details(self, workflow_uuid, load_io_details=True):
         try:
-            workflow_obj = self._galaxy_instance_obj.workflows.get(workflow_id)
+            workflow_metadata = None
+            workflows = self.api.workflows.get_workflows()
+            for wf in workflows:
+                wf['uuid'] = wf['latest_workflow_uuid']
+                if wf['latest_workflow_uuid'] == workflow_uuid:
+                    workflow_metadata = wf
+                    break
+            if not workflow_metadata:
+                return None
+            workflow_obj = self._galaxy_instance_obj.workflows.get(workflow_metadata['id'])
             workflow_metadata = workflow_obj.export()
             if load_io_details:
                 workflow_io_details = [
@@ -403,15 +414,16 @@ class GalaxyPlatform(object):
                         step_metadata = workflow_obj.steps[step]
                         if step_metadata.tool_id:
                             tool_step = self.get_tool(step_metadata.tool_id)
-                            if tool_step:
+                            if not tool_step:
+                                logger.error("Unable to load metadata of tools related with step %r", step_metadata.id)
+                                return None
+                            else:
                                 workflow_metadata[collection].append(tool_step)
             return workflow_metadata
         except ConnectionError as e:
             logger.error("Error during connection with exposed API method for workflow {0}".format(workflow_id), exc_info=True)
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
-            sys.exit(1)
-        return workflow_metadata
 
     def import_workflow(self, workflow_or_filename):
         try:
@@ -740,17 +752,16 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
 
 
 def map_workflow_tools(galaxy_metadata, config, mapping_edam):
-    try:
-        tools = {}
-        tools_steps = galaxy_metadata["inputs"] + galaxy_metadata["operations"] + galaxy_metadata["outputs"]
-        for tool in tools_steps:
-            print(tool)
-            tools[tool['id']] = map_tool(tool, config, mapping_edam)
-        return tools
-    except Exception as e:
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.exception(e)
-        return None
+    # try:
+    tools = {}
+    tools_steps = galaxy_metadata["inputs"] + galaxy_metadata["operations"] + galaxy_metadata["outputs"]
+    for tool in tools_steps:
+        tools[tool['id']] = map_tool(tool, config, mapping_edam)
+    return tools
+    # except Exception as e:
+    #     if logger.isEnabledFor(logging.DEBUG):
+    #         logger.exception(e)
+    #     raise Exception()
 
 
 def map_workflow(galaxy_metadata, conf, mapping_edam):
@@ -1381,7 +1392,7 @@ def export_galaxy_workflows(config, workflows_filter=None):
         workflows_metadata = GalaxyPlatform.getInstance().get_workflows(ids=workflows_filter, details=True, step_tools_details=True)
     else:
         workflows_metadata = GalaxyPlatform.getInstance().get_workflows(
-            ids=[w['uuid'] for w in workflows_metadata], details=True, step_tools_details=True)
+            ids=workflows_metadata, details=True, step_tools_details=True)
     print("DONE")
     # Generate BioTools files for both tools and workflows
     biotools_metadata = build_biotools_files(config, type="workflow", galaxy_metadata=workflows_metadata)
