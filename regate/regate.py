@@ -757,16 +757,11 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
 
 
 def map_workflow_tools(galaxy_metadata, config, mapping_edam):
-    # try:
     tools = {}
     tools_steps = galaxy_metadata["inputs"] + galaxy_metadata["operations"] + galaxy_metadata["outputs"]
     for tool in tools_steps:
         tools[tool['id']] = map_tool(tool, config, mapping_edam)
     return tools
-    # except Exception as e:
-    #     if logger.isEnabledFor(logging.DEBUG):
-    #         logger.exception(e)
-    #     raise Exception()
 
 
 def map_workflow(galaxy_metadata, conf, mapping_edam):
@@ -1054,16 +1049,6 @@ def outputs_extract(outputs_json, mapping_edam, biotools_inputs):
                           }
         listoutput.append(outputdict)
     return listoutput
-
-
-# def extract_edam_from_galaxy(mapping_edam=None):
-#    """
-#    :param mapping_edam:
-#    :return:
-#    """
-#    if not mapping_edam:
-#        mapping_edam = {}
-#    return mapping_edam
 
 
 def build_edam_dict(yaml_file):
@@ -1482,7 +1467,9 @@ def find_biotools_toolshed_id(tool):
     return toolshed_id
 
 
-def get_elixir_tools_list(registry_url, tools_list=None, tool_type=_RESOURCE_TYPE.TOOL,  tool_collectionID=None, only_regate_tools=False):
+def get_elixir_tools_list(registry_url, 
+                          tools_list=None, tool_type=_RESOURCE_TYPE.TOOL,  
+                          tool_collectionID=None, only_regate_tools=False):
     try:
         resource_type = "Web application" if tool_type == _RESOURCE_TYPE.TOOL else "Workflow"
         res_url = urljoin(registry_url, '/api/tool')
@@ -1557,11 +1544,6 @@ def _push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
 
     # Load Galaxy tools
     if len(tools) > 0:
-        # if check_exists:
-        #     print("> Loading existing Galaxy tools... ", end='', flush=True)
-        #     existing_tools = gi.get_tools()
-        #     print_done()
-
         # Import all tools/workflows
         print(bold("\n> Pushing tools on the Galaxy platform..."))
         for resource in tools:
@@ -1570,10 +1552,6 @@ def _push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
                                                           resource["version"]), end='', flush=True)
             try:
                 if check_exists and gi.get_tool(resource['id']):
-                    # if check_exists and \
-                    #     len([t for t in existing_tools
-                    #          if t['name'] == resource['name'] and
-                    #          t['version'] == resource['version']]) > 0:
                     logger.info("Tool %s [version %s] already exists", resource['id'], resource['version'])
                     print_exists()
                     continue
@@ -1587,11 +1565,6 @@ def _push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
 
     # Load Galaxy workflows
     if len(workflows) > 0:
-        # if check_exists:
-        #     print("> Loading existing Galaxy workflows... ", end='', flush=True)
-        #     existing_workflows = gi.get_workflows()
-        #     print_done()
-
         # Import all tools/workflows
         print(bold("\n> Pushing workflows on the Galaxy platform..."))
         for resource in workflows:
@@ -1600,10 +1573,6 @@ def _push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
                                                           resource["version"]), end='', flush=True)
             try:
                 if check_exists and gi.get_workflow(resource['uuid']):
-                    # if check_exists and \
-                    #     len([w for w in existing_workflows
-                    #          if w['name'] == resource['name'] and
-                    #          w['version'] == resource['version']]) > 0:
                     logger.info("Workflow %s [version %s] already exists", resource['uuid'], resource['version'])
                     print_exists()
                     continue
@@ -1888,23 +1857,6 @@ def push_to_target_platform(options):
         else:
             _push_to_galaxy(config, biotools_json_files, check_exists=True)
 
-
-# def push_to_galaxy(options):
-#     # Build list of BioTools JSON files to publish
-#     galaxy_json_files = []
-
-#     # Load configuration file
-#     config = load_config(options)
-
-#     tools_dir = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "tool")
-#     if options.resource == _RESOURCE_TYPE.TOOL.value or options.resource == _RESOURCE_TYPE.ALL.value:
-#         galaxy_json_files.extend([f for f in glob.glob(os.path.join(tools_dir, "*.json")) if os.path.isfile(f)])
-
-#     workflows_dir = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, "workflow")
-#     if options.resource == _RESOURCE_TYPE.WORKFLOW.value or options.resource == _RESOURCE_TYPE.ALL.value:
-#         galaxy_json_files.extend([f for f in glob.glob(os.path.join(workflows_dir, "*.json")) if os.path.isfile(f)])
-
-#     _push_to_galaxy(config, galaxy_json_files, check_exists=True)
 
 
 def push(args):
