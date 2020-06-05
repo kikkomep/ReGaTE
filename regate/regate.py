@@ -289,6 +289,7 @@ class GalaxyPlatform(object):
                             tools_metadata.append(tool)
                     else:
                         tools_metadata.append(tool)
+        tools_metadata.sort(key=lambda x: x['name'])
         return tools_metadata
 
     def get_galaxy_tool_wrapper_archive(self, tool_id):
@@ -387,6 +388,7 @@ class GalaxyPlatform(object):
                         workflow_metadata = self._load_workflow_details(wf['uuid'], load_io_details=step_tools_details)
                         if workflow_metadata:
                             workflows_metadata.append(workflow_metadata)
+        workflows_metadata.sort(key=lambda x: x["name"])
         return workflows_metadata
 
     def _load_workflow_details(self, workflow_uuid, load_io_details=True):
@@ -1482,7 +1484,7 @@ def get_elixir_tools_list(registry_url,
         res_url = urljoin(registry_url, '/api/tool')
         # load all tools by page
         while page:
-            params = {"toolType": resource_type, 'page': page, 'sort': 'name'}
+            params = {"toolType": resource_type, 'page': page, 'sort': 'name', 'ord': 'asc'}
             if tool_collectionID:
                 params["collectionID"] = tool_collectionID
             resp = requests.get(res_url, headers=_build_request_headers(), params=params)
