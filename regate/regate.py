@@ -1250,7 +1250,7 @@ def build_biotools_files(conf, type, galaxy_metadata):
     # write tools
     mappings = []
     if len(galaxy_metadata) > 0:
-        print(bold("\n> Converting {}s on the BioTools format...".format(type)))
+        print(bold("\n> Converting {}s to the BioTools format...".format(type)))
     for metadata in galaxy_metadata:
         try:
             print("  - {} (id {}, version {})...".format(metadata["name"],
@@ -1436,7 +1436,7 @@ def export_from_galaxy(options):
                 biotools_json_files.append(filename)
         # Publish BioTools files
         if len(biotools_json_files) == 0:
-            print(warning("WARNING: no resource to publish on the ELIXIR registry '{}'".format(config.bioregistry_host)))
+            print(warning("\n  WARNING: no resource to publish on the ELIXIR registry '{}'\n".format(config.bioregistry_host)))
         else:
             _push_to_elix(config.login, config.bioregistry_host, config.ssl_verify, biotools_json_files, config.resourcename)
 
@@ -1597,7 +1597,7 @@ def export_biotools_tools(config, tools_filter=None):
         ]
         answers = prompt(questions, style=custom_style_2)
         if not answers["disable_filter"]:
-            print(bold("> Loading list of Galaxy tools... "), end='', flush=True)
+            print(bold("> Loading list of BioTools tools... "), end='', flush=True)
             # Build the list of tools to export
             tools = {"{} (id {}, version {})".format(
                 w['name'], w['biotoolsID'], w['version'][0]): w
@@ -1631,9 +1631,9 @@ def export_biotools_tools(config, tools_filter=None):
     success = []
     failures = []
     if len(biotools)==0:
-        print(warning("  WARNING: no BioTools tool to export."))
+        print(warning("\n  WARNING: no BioTools tool to export\n"))
     else:
-        print(bold("\n> Converting Biotools tools on a Galaxy format... "))
+        print(bold("\n> Converting Biotools tools to the Galaxy format... "))
         for tool in biotools:
             print("  - {} (id {}, version {})... ".format(tool["name"], tool["biotoolsID"], tool["version"]), end='')
             toolshed_info = find_biotools_toolshed_id(tool)
@@ -1679,7 +1679,7 @@ def export_biotools_tools(config, tools_filter=None):
                     print_error()
                     failures.append(tool)
                     # print(failure("ERROR: unable to find toolshed repository"))
-                    logger.error("Unable to extract Galaxy workflow definition from BioTools")
+                    logger.error("Unable to extract the Galaxy tool definition from BioTools")
                     if logger.isEnabledFor(logging.DEBUG):
                         logger.exception(e)
     return success, failure
@@ -1733,9 +1733,9 @@ def export_biotools_workflows(config, workflows_filter=None):
     success = []
     failure = []
     if len(workflows_metadata)==0:
-        print(warning("  WARNING: no BioTools workflow to export."))
+        print(warning("\n  WARNING: no BioTools workflow to export\n"))
     else:
-        print(bold("\n> Converting Biotools workflows on a Galaxy format... "))
+        print(bold("\n> Converting Biotools workflows to the Galaxy format... "))
         for workflow in workflows_metadata:
             try:
                 print("  - {} (id {}, version {})...".format(workflow["name"],
@@ -1756,7 +1756,7 @@ def export_biotools_workflows(config, workflows_filter=None):
             except Exception as e:
                 print_error()
                 failure.append(workflow)
-                logger.error("Unable to extract Galaxy workflow definition from BioTools")
+                logger.error("Unable to extract the Galaxy workflow definition from BioTools")
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.exception(e)
     return success, failure
@@ -1850,7 +1850,7 @@ def push_to_target_platform(options):
             biotools_json_files.extend([f for f in glob.glob(os.path.join(resource_dir, "*.json")) if os.path.isfile(f)])
 
     if len(biotools_json_files) == 0:
-        print(warning("  WARNING: no resource to publish on the ELIXIR registry '{}'".format(config.bioregistry_host)))
+        print(warning("\n  WARNING: no resource to publish on the ELIXIR registry '{}'\n".format(config.bioregistry_host)))
     else:
         if options.platform == _ALLOWED_SOURCES.BIOTOOLS.value:
             _push_to_elix(config.login, config.bioregistry_host, config.ssl_verify, biotools_json_files, config.resourcename)
