@@ -40,7 +40,7 @@ from bioblend.galaxy.client import ConnectionError
 from bioblend.galaxy import GalaxyInstance as _GalaxyInstance
 from bioblend.galaxy.objects import GalaxyInstance as _GalaxyObjectInstance
 from logging.handlers import RotatingFileHandler
-from PyInquirer import style_from_dict, Token, prompt, Separator
+from PyInquirer import style_from_dict, Token, prompt as _prompt, Separator
 
 logger = logging.getLogger()
 
@@ -1083,7 +1083,6 @@ def auth(login, host, ssl_verify):
     """
     key = None
     while key is None:
-        #password = getpass.getpass(prompt="  => password: ")
         print("")
         questions = [
             {
@@ -2030,6 +2029,17 @@ class DynamicObject(dict):
         for k, v in properties.items():
             self.__setattr__(k, v)
 
+_PROMPT_OPTIONS = {
+    "style": custom_style_2, 
+    "raise_keyboard_interrupt": True
+}
+
+def prompt(questions, answers=None):
+    answers = _prompt(questions, **_PROMPT_OPTIONS)
+    if not answers:
+        sys.exit(0)
+    return answers
+
 
 def wizard(args):
 
@@ -2062,13 +2072,12 @@ def wizard(args):
         }
     ]
 
-    answers = prompt(questions, style=custom_style_2)
-    options = DynamicObject(answers)
-    options.merge(vars(args))
-    options.command = "export"
-    logger.debug("Selected options: %s", options)
-
     try:
+        answers = prompt(questions)
+        options = DynamicObject(answers)
+        options.merge(vars(args))
+        options.command = "export"
+        logger.debug("Selected options: %s", options)
         sub_cmd = "export_from_{}".format(options.platform)
         globals()[sub_cmd](options)
     except KeyError as e:
