@@ -1092,7 +1092,7 @@ def auth(login, host, ssl_verify):
                 'name': 'password'
             }
         ]
-        answers = prompt(questions, style=custom_style_2)
+        answers = prompt(questions)
         url = host + '/api/rest-auth/login/'
         resp = requests.post(url, '{{"username": "{0}","password": "{1}"}}'.format(login, answers["password"]),
                              headers=_build_request_headers(), verify=ssl_verify)
@@ -1322,7 +1322,7 @@ def export_galaxy_tools(config, tools_filter=None):
                 'default': True
             }
         ]
-        answers = prompt(questions, style=custom_style_2)
+        answers = prompt(questions)
         if not answers["disable_filter"]:
             print(bold("> Loading list of Galaxy tools... "), end='', flush=True)
             # Build the list of tools to export
@@ -1336,7 +1336,7 @@ def export_galaxy_tools(config, tools_filter=None):
                     'choices': [{'name': w} for w in list(tools)],
                 }
             ]
-            answers = prompt(questions, style=custom_style_2)
+            answers = prompt(questions)
             galaxy_metadata = [t for k, t in tools.items() if k in answers["tools"]]
     # Build the list of tools to export
     print(bold("\n> Loading Galaxy tools... "), end='', flush=True)
@@ -1369,7 +1369,7 @@ def export_galaxy_workflows(config, workflows_filter=None):
                 'default': True
             }
         ]
-        answers = prompt(questions, style=custom_style_2)
+        answers = prompt(questions)
         if not answers["disable_filter"]:
             print(bold("> Loading list of Galaxy workflows... "), end='', flush=True)
             # Build the list of tools to export
@@ -1384,7 +1384,7 @@ def export_galaxy_workflows(config, workflows_filter=None):
                     'choices': [{'name': w} for w in list(workflows)],
                 }
             ]
-            answers = prompt(questions, style=custom_style_2)
+            answers = prompt(questions)
             workflows_metadata = [w for k, w in workflows.items() if k in answers["workflows"]]
     # exported workflows
     # TODO: add ignore list for workflows, ignore=config.tools_default)
@@ -1609,7 +1609,7 @@ def export_biotools_tools(config, tools_filter=None):
                 'default': True
             }
         ]
-        answers = prompt(questions, style=custom_style_2)
+        answers = prompt(questions)
         if not answers["disable_filter"]:
             print(bold("> Loading list of BioTools tools... "), end='', flush=True)
             # Build the list of tools to export
@@ -1627,7 +1627,7 @@ def export_biotools_tools(config, tools_filter=None):
                     'choices': [{'name': w} for w in list(tools)],
                 }
             ]
-            answers = prompt(questions, style=custom_style_2)
+            answers = prompt(questions)
             biotools = [t for k, t in tools.items() if k in answers["tools"]]
     # Build the list of tools to export
     if not biotools:
@@ -1710,7 +1710,7 @@ def export_biotools_workflows(config, workflows_filter=None):
                 'default': True
             }
         ]
-        answers = prompt(questions, style=custom_style_2)
+        answers = prompt(questions)
         if not answers["disable_filter"]:
             print(bold("> Loading list of Galaxy workflows... "), end='', flush=True)
             # Build the list of tools to export
@@ -1728,7 +1728,7 @@ def export_biotools_workflows(config, workflows_filter=None):
                     'choices': [{'name': w} for w in list(workflows)],
                 }
             ]
-            answers = prompt(questions, style=custom_style_2)
+            answers = prompt(questions)
             workflows_metadata = [w for k, w in workflows.items() if k in answers["workflows"]]
     if not workflows_metadata:
         # NOTE: the 'only_regate_tools' constraint might be relaxed
@@ -1847,7 +1847,7 @@ def push_to_target_platform(options):
                     'default': True
                 }
             ]
-            answers = prompt(questions, style=custom_style_2)
+            answers = prompt(questions)
             if not answers["disable_filter"]:
 
                 questions = [
@@ -1858,7 +1858,7 @@ def push_to_target_platform(options):
                         'choices': [{'name': t} for t in list(tools)],
                     }
                 ]
-                answers = prompt(questions, style=custom_style_2)
+                answers = prompt(questions)
                 biotools_json_files.extend([t for k, t in tools.items() if k in answers["tools"]])
         else:
             biotools_json_files.extend([f for f in glob.glob(os.path.join(resource_dir, "*.json")) if os.path.isfile(f)])
