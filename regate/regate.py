@@ -95,7 +95,7 @@ class _RESOURCE_TYPE(Enum):
         return [o.value for o in _RESOURCE_TYPE]
 
 
-class _ALLOWED_SOURCES (Enum):
+class _ALLOWED_SOURCES(Enum):
     GALAXY = "galaxy"
     BIOTOOLS = "biotools"
 
@@ -104,7 +104,7 @@ class _ALLOWED_SOURCES (Enum):
         return [o.value for o in _ALLOWED_SOURCES]
 
 
-class _ALLOWED_COMMANDS (Enum):
+class _ALLOWED_COMMANDS(Enum):
     EXPORT = "export"
     PUSH = "push"
     TEMPLATE = "template"
@@ -129,7 +129,6 @@ def get_data_path(path):
 
 
 class Config(object):
-
     """
     class config to parse and check the config.ini file
     """
@@ -155,7 +154,8 @@ class Config(object):
                     self.login = self.assign("regate_specific_section", "login", ismandatory=True,
                                              message="login option is mandatory to push resources to Elixir")
                     self.bioregistry_host = self.assign("regate_specific_section", "bioregistry_host", ismandatory=True,
-                                                        message="bioregistry_host option is mandatory to export or publish tools and/or workflows to the Elixir registry")
+                                                        message="bioregistry_host option is mandatory to export "
+                                                                "or publish tools and/or workflows to the Elixir registry")
                     self.ssl_verify = self.assign("regate_specific_section", "ssl_verify", ismandatory=True,
                                                   message="ssl_verify option is mandatory to push resources to Elixir", boolean=True)
                     self.accessibility = self.assign("regate_specific_section", "accessibility", ismandatory=True,
@@ -220,7 +220,6 @@ class Config(object):
 
 
 class GalaxyPlatform(object):
-
     __instance = None
 
     @staticmethod
@@ -425,7 +424,7 @@ class GalaxyPlatform(object):
                                 workflow_metadata[collection].append(tool_step)
             return workflow_metadata
         except ConnectionError as e:
-            logger.error("Error during connection with exposed API method for workflow {0}".format(workflow_id), exc_info=True)
+            logger.error("Error during connection with exposed API method for workflow {0}".format(workflow_uuid), exc_info=True)
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
 
@@ -640,8 +639,8 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
         ##### LABELS GROUP ######################################################################################
         'toolType': ["Web application"],
         'topic': galaxy_metadata['edam_topics'] \
-        if 'edam_topics' in galaxy_metadata and len(galaxy_metadata['edam_topics']) > 0 \
-        else [DEFAULT_EDAM_TOPIC],
+            if 'edam_topics' in galaxy_metadata and len(galaxy_metadata['edam_topics']) > 0 \
+            else [DEFAULT_EDAM_TOPIC],
         # TODO: check if can be detected from XML configuration file
         'operatingSystem': ['Linux'],
         'language': [],
@@ -748,7 +747,8 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
             },
             {
                 'type': 'Other',
-                'url': urljoin(conf.galaxy_url, "{}/{}?".format('api/tools', galaxy_metadata['id'], 'io_details=true&link_details=true')),
+                'url': urljoin(conf.galaxy_url, "{}/{}?".format('api/tools', galaxy_metadata['id'],
+                                                                'io_details=true&link_details=true')),
                 'note': "Tool metadata available on the Galaxy Platform"
             }
         ])
@@ -878,8 +878,10 @@ def map_workflow(galaxy_metadata, conf, mapping_edam):
         mapping['download'].extend([
             {
                 'type': 'Tool wrapper (galaxy)',
-                'url': urljoin(conf.galaxy_url, "{}/{}/download?format=json-download".format('api/workflows/', galaxy_metadata['uuid'])),
-                'note': build_description_note(galaxy_metadata) + "[provided by Galaxy Platform]",  # FIXME: check string
+                'url': urljoin(conf.galaxy_url,
+                               "{}/{}/download?format=json-download".format('api/workflows/', galaxy_metadata['uuid'])),
+                'note': build_description_note(galaxy_metadata) + "[provided by Galaxy Platform]",
+                # FIXME: check string
                 'version': galaxy_metadata['version']
             }
         ])
@@ -892,11 +894,12 @@ def map_workflow(galaxy_metadata, conf, mapping_edam):
 def check_str_data_length(data, length=1000):
     if not data or len(data) == 0:
         return ""
-    return "{}...".format(data[:(length-2)]) if len(data) > length else data
+    return "{}...".format(data[:(length - 2)]) if len(data) > length else data
 
 
 def build_description_note(galaxy_metadata):
-    return "{} ({})".format(galaxy_metadata["name"], re.sub('^[^a-zA-Z0-9_]+|[^a-zA-Z0-9]+$', '', build_tool_description(galaxy_metadata))) \
+    return "{} ({})".format(galaxy_metadata["name"],
+                            re.sub('^[^a-zA-Z0-9_]+|[^a-zA-Z0-9]+$', '', build_tool_description(galaxy_metadata))) \
         if "description" in galaxy_metadata and galaxy_metadata["description"] \
         else galaxy_metadata["name"]
 
@@ -1256,7 +1259,8 @@ def build_biotools_files(conf, type, galaxy_metadata):
             print("  - {} (id {}, version {})...".format(metadata["name"],
                                                          metadata['id' if type == "tool" else "uuid"],
                                                          metadata["version"]), end='', flush=True)
-            biotools_metadata = map_tool(metadata, conf, mapping_edam) if type == "tool" else map_workflow(metadata, conf, mapping_edam)
+            biotools_metadata = map_tool(metadata, conf, mapping_edam) \
+                if type == "tool" else map_workflow(metadata, conf, mapping_edam)
             file_name = build_filename(metadata['id' if type == "tool" else "uuid"], metadata['version'])
             write_json_files(file_name, biotools_metadata, tools_dir)
             with open(os.path.join(tools_dir, "{}.yaml".format(file_name)), 'w') as outfile:
@@ -1848,7 +1852,6 @@ def push_to_target_platform(options):
             ]
             answers = prompt(questions)
             if not answers["disable_filter"]:
-
                 questions = [
                     {
                         'type': 'checkbox',
@@ -2028,9 +2031,11 @@ class DynamicObject(dict):
         for k, v in properties.items():
             self.__setattr__(k, v)
 
+
 _PROMPT_OPTIONS = {
     "style": custom_style_2
 }
+
 
 def prompt(questions, answers=None):
     answers = _prompt(questions, answers=None, **_PROMPT_OPTIONS)
@@ -2040,7 +2045,6 @@ def prompt(questions, answers=None):
 
 
 def wizard(args):
-
     questions = [
         {
             'type': 'list',
