@@ -59,6 +59,8 @@ file_handler_edam.setLevel(logging.WARNING)
 file_handler_edam.setFormatter(formatter)
 logger.addHandler(file_handler_edam)
 
+REGATE_SEPARATOR = "_____"
+
 REGATE_PREFIX_ID = "biotools:regate"
 
 TOOLSHED_PREFIX_ID = "biotools:toolshed"
@@ -691,7 +693,10 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
         mapping['otherID'].extend([
             {
                 'type': "biotoolsCURIE",
-                'value': "{}_{}_{}_{}_{}".format(TOOLSHED_PREFIX_ID, toolshed['tool_shed'], toolshed['owner'], toolshed['name'], toolshed['name']),
+                'value': "{}{}{}{}{}{}{}".format(TOOLSHED_PREFIX_ID, REGATE_SEPARATOR,
+                                                 toolshed['tool_shed'], REGATE_SEPARATOR,
+                                                 toolshed['owner'], REGATE_SEPARATOR,
+                                                 toolshed['name'], REGATE_SEPARATOR),
                 'version': toolshed['changeset_revision']
             }
         ])
@@ -1445,7 +1450,7 @@ def find_biotools_toolshed_id(tool):
     toolshed_id = None
     for oid in tool["otherID"]:
         if oid["value"].startswith(TOOLSHED_PREFIX_ID):
-            tid_parts = oid["value"].split("_")
+            tid_parts = oid["value"].split(REGATE_SEPARATOR)
             toolshed_id = {
                 "tool_shed": tid_parts[1],
                 "owner": tid_parts[2],
