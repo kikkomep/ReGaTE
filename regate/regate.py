@@ -1471,30 +1471,43 @@ def get_elixir_tools_list(registry_url,
                           tools_list=None, tool_type=_RESOURCE_TYPE.TOOL,
                           tool_collectionID=None, only_regate_tools=False):
     try:
+        result = []
+        # Prepare tools filter
+        tools_list = tools_list.split(',') if tools_list and isinstance(tools_list, str) else tools_list
+        tools_filter_ids = [t.lower() for t in tools_list] if tools_list else None
+        # Prepare request parameters
+        page = 1
+        page_pattern = re.compile(r"\?page=(\d+)")
         resource_type = "Web application" if tool_type == _RESOURCE_TYPE.TOOL else "Workflow"
         res_url = urljoin(registry_url, '/api/tool')
-        params = {"toolType": resource_type}
-        if tool_collectionID:
-            params["collectionID"] = tool_collectionID
-        resp = requests.get(res_url, headers=_build_request_headers(), params=params)
-        if resp.status_code == 200:
-            # filter tools by otherID == biotools:regate_
-            tools = [t for t in resp.json()["list"] if not only_regate_tools or find_biotools_regate_id(t)]
-            tools_list = tools_list.split(',') if tools_list and isinstance(tools_list, str) else tools_list
-            if tools_list:
-                filtered_tools = []
-                tools_id = [t.lower() for t in tools_list]
-                for tid in tools_id:
-                    found = False
-                    for tool in tools:
-                        if tool["biotoolsID"].lower() == tid or tool["name"].lower() == tid:
-                            filtered_tools.append(tool)
-                            found = True
-                            break
-                    if not found:
-                        logger.error("Unable to find tool: %s", tid)
-                return filtered_tools
-            return tools
+        # load all tools by page
+        while page:
+            params = {"toolType": resource_type, 'page': page, 'sort': 'name'}
+            if tool_collectionID:
+                params["collectionID"] = tool_collectionID
+            resp = requests.get(res_url, headers=_build_request_headers(), params=params)
+            if resp.status_code == 200:
+                # filter tools by otherID == biotools:regate_
+                response_json = resp.json()
+                tools = [t for t in response_json["list"] if not only_regate_tools or find_biotools_regate_id(t)]
+                if not tools_list:
+                    result.extend(tools)
+                else:
+                    for tid in tools_filter_ids:
+                        found = False
+                        for tool in tools:
+                            if tool["biotoolsID"].lower() == tid or tool["name"].lower() == tid:
+                                result.append(tool)
+                                found = True
+                                break
+                        if not found:
+                            logger.error("Unable to find tool: %s", tid)
+            if response_json["next"]:
+                next_page_match = page_pattern.match(response_json["next"])
+                page = next_page_match.group(1) if next_page_match else None
+            else:
+                page = None
+        return result
     except Exception as e:
         logger.error("Error listing tools from %s", registry_url)
         if logger.isEnabledFor(logging.DEBUG):
