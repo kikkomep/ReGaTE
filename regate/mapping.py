@@ -232,7 +232,7 @@ def map_workflow(galaxy_metadata, conf, mapping_edam):
         'download': [
             {
                 'type': 'Tool wrapper (galaxy)',
-                'url': build_download_link(conf, json.dumps(galaxy_metadata),
+                'url': build_download_link(conf, galaxy_metadata.to_json(),
                                            filename="{}.json".format(galaxy_metadata['uuid']),
                                            mimetype="application/json"),
                 'note': "Galaxy Workflow definition as base64 encoded data URI on the 'data' URL parameter.",
