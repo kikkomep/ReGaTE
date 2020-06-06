@@ -66,7 +66,7 @@ def export_from_galaxy(options):
     # Load configuration file
     config = load_config(options)
     # configure the Galaxy instance
-    GalaxyPlatform.getInstance().configure(config.galaxy_url, config.api_key)
+    GalaxyPlatform.get_instance().configure(config.galaxy_url, config.api_key)
     # Export tools
     tools = []
     if options.resource == _RESOURCE_TYPE.TOOL.value or options.resource == _RESOURCE_TYPE.ALL.value:
@@ -103,7 +103,7 @@ def export_from_galaxy(options):
 def export_galaxy_resources(config, resource_type, resources_filter=None, ignore_list=None):
     resources_metadata = None
     resource_id_label = get_galaxy_resource_id_label(resource_type)
-    resource_loader = getattr(GalaxyPlatform.getInstance(), "get_{}s".format(resource_type.value))
+    resource_loader = getattr(GalaxyPlatform.get_instance(), "get_{}s".format(resource_type.value))
     if not resources_filter and not config.no_interactive:
         resources_metadata = prompt_platform_resource_selection(_ALLOWED_SOURCES.GALAXY,
                                                                 resource_type,
@@ -168,7 +168,7 @@ def export_from_biotools(options):
     # Load configuration file
     config = load_config(options)
     # config BioToolsPlatform instance
-    BioToolsPlatform.getInstance().configure(config)
+    BioToolsPlatform.get_instance().configure(config)
     # Export tools
     tools = []
     tools_failures = None
@@ -192,7 +192,7 @@ def export_from_biotools(options):
 
 def export_biotools_resources(config, resource_type, resource_filter=None):
     biotools = None
-    bi = BioToolsPlatform.getInstance()
+    bi = BioToolsPlatform.get_instance()
     resource_loader = bi.get_tools if resource_type == _RESOURCE_TYPE.TOOL else bi.get_workflows
     if not config.no_interactive and not resource_filter:
         biotools = prompt_platform_resource_selection(_ALLOWED_SOURCES.BIOTOOLS,
@@ -202,8 +202,7 @@ def export_biotools_resources(config, resource_type, resource_filter=None):
     if not biotools:
         # NOTE: the 'only_regate_tools' constraint might be relaxed
         print(bold("> Loading list of bio.tools {}s... ".format(resource_type.value)), end='')
-        biotools = resource_loader(filter_list=resource_filter.split(',') if resource_filter else None,
-                                   only_regate_tools=True)
+        biotools = resource_loader(identifier_list=resource_filter.split(',') if resource_filter else None)
         print_done()
     # init output folder
     output_folder = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, resource_type.value)
@@ -389,7 +388,7 @@ def biotools_authenticate(config):
             }
         ]
         answers = prompt(questions)
-        key = BioToolsPlatform.getInstance().authenticate(config.login, answers["password"], config.ssl_verify)
+        key = BioToolsPlatform.get_instance().authenticate(config.login, answers["password"], config.ssl_verify)
     return key
 
 
@@ -403,7 +402,7 @@ def _push_to_elix(config, biotools_json_data_list, resourcename):
     errors = []
 
     # init BioTools
-    BioToolsPlatform.getInstance().configure(config)
+    BioToolsPlatform.get_instance().configure(config)
 
     # Get Auth Token
     logger.debug("authenticating...")
@@ -422,10 +421,10 @@ def _push_to_elix(config, biotools_json_data_list, resourcename):
             json_string = json.dumps(json_data)
         print(" - {} (id {}, version {})... ".format(json_data['name'],
                                                      json_data['biotoolsID'], json_data['version'][0]), end='', flush=True)
-        # TODO: replace removal with a proper upgrade
-        bi = BioToolsPlatform.getInstance()
-        bi.remove_existing_elixir_tool_version(json_data['biotoolsID'], json_data['version'][0], resourcename)
         try:
+            # TODO: replace removal with a proper upgrade
+            bi = BioToolsPlatform.get_instance()
+            bi.remove_existing_elixir_tool_version(json_data['biotoolsID'], json_data['version'][0], resourcename)
             bi.push_tool(json_string)
             logger.debug("{0} ok".format(json_data["name"]))
             success.append(json_data)
@@ -436,14 +435,13 @@ def _push_to_elix(config, biotools_json_data_list, resourcename):
             print_error()
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
-
     logger.info("import finished, ok={0}, ko={1}".format(len(success), len(errors)))
     return success, errors
 
 
 def _push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
     # Init Galaxy
-    gi = GalaxyPlatform.getInstance()
+    gi = GalaxyPlatform.get_instance()
     gi.configure(config.galaxy_url, config.api_key)
     # Preload all JSON files
     tools = []

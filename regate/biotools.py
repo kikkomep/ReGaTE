@@ -10,23 +10,15 @@ from urllib.parse import urljoin
 from regate.cli.helpers import prompt
 from regate.const import _RESOURCE_TYPE
 from regate.mapping import find_biotools_regate_id
+from regate.objects import Platform
 
 logger = logging.getLogger()
 
 
-class BioToolsPlatform(object):
-    __instance = None
-
-    @staticmethod
-    def getInstance() -> BioToolsPlatform:
-        if not BioToolsPlatform.__instance:
-            BioToolsPlatform()
-        return BioToolsPlatform.__instance
+class BioToolsPlatform(Platform):
 
     def __init__(self):
-        if BioToolsPlatform.__instance:
-            raise Exception("Singleton class: an instance of this class already exists!")
-        BioToolsPlatform.__instance = self
+        super().__init__()
         self.__config = None
         self.__token = None
 
@@ -56,17 +48,23 @@ class BioToolsPlatform(object):
         self.__token = resp.json().get('key')
         return self.__token is not None
 
-    def get_tools(self, filter_list=None, collectionID=None, only_regate_tools=False):
-        return self.get_elixir_tools_list(tools_list=filter_list,
-                                          tool_type=_RESOURCE_TYPE.TOOL,
-                                          tool_collectionID=collectionID,
-                                          only_regate_tools=only_regate_tools)
+    def get_tool(self, identifier):
+        return self.find_elixir_tool(identifier)
 
-    def get_workflows(self, filter_list=None, collectionID=None, only_regate_tools=False):
-        return self.get_elixir_tools_list(tools_list=filter_list,
+    def get_tools(self, identifier_list=None, ignore=None, details=False):
+        return self.get_elixir_tools_list(tools_list=identifier_list,
+                                          tool_type=_RESOURCE_TYPE.TOOL,
+                                          tool_collectionID=self.config.resourcename,
+                                          only_regate_tools=True)
+
+    def get_workflow(self, identifier):
+        return self.find_elixir_tool(identifier)
+
+    def get_workflows(self, identifier_list=None, ignore=None, details=False):
+        return self.get_elixir_tools_list(tools_list=identifier_list,
                                           tool_type=_RESOURCE_TYPE.WORKFLOW,
-                                          tool_collectionID=collectionID,
-                                          only_regate_tools=only_regate_tools)
+                                          tool_collectionID=self.config.resourcename,
+                                          only_regate_tools=True)
 
     def get_elixir_tools_list(self,
                               tools_list=None, tool_type=_RESOURCE_TYPE.TOOL,
@@ -115,33 +113,54 @@ class BioToolsPlatform(object):
                 logger.exception(e)
         return None
 
-    def push_tool(self, data):
-        data_as_string = data
-        if not isinstance(data, str):
-            data_as_string = json.dumps(data)
+    def import_tool(self, dict_or_filename):
+        return self.import_dict_or_filename(dict_or_filename)
+
+    def import_workflow(self, dict_or_filename):
+        return self.import_dict_or_filename(dict_or_filename)
+
+    def import_dict_or_filename(self, dict_or_filename):
+        if isinstance(dict_or_filename, str):
+            with open(dict_or_filename) as json_file:
+                return self.push_tool(json_file.read())
+        return self.push_tool(dict_or_filename)
+
+    def push_tool(self, dict_or_json):
+        data_as_string = dict_or_json
+        if not isinstance(dict_or_json, str):
+            data_as_string = json.dumps(dict_or_json)
         url = self.config.bioregistry_host + "/api/tool"
         resp = requests.post(url, data_as_string, headers=_build_request_headers(self.token), verify=self.config.ssl_verify)
         if resp.status_code != 201:
             raise Exception(resp.text)
 
+    def find_elixir_tool(self, tool_id, tool_version=None):
+        try:
+            # try without version number
+            res_url = urljoin(self.config.bioregistry_host, '/api/tool/{0}'.format(tool_id))
+            resp = requests.get(res_url, headers=_build_request_headers(self.token))
+            if resp.status_code == 200:
+                return resp.json()
+            # try first with version number if provided
+            if tool_version:
+                res_url = urljoin(self.config.bioregistry_host, '/api/tool/{0}/version/{1}'.format(tool_id, tool_version))
+                resp = requests.get(res_url, headers=_build_request_headers(self.token))
+                if resp.status_code == 200:
+                    return resp.json()
+        except Exception as e:
+            logger.error("Error removing resource {0}".format(tool_id), exc_info=True)
+        return None
+
     def remove_existing_elixir_tool_version(self, tool_id, tool_version, tool_collectionID):
         try:
-            # try first with version number
-            res_url = urljoin(self.config.bioregistry_host, '/api/tool/{0}/version/{1}'.format(tool_id, tool_version))
-            resp = requests.get(res_url, headers=_build_request_headers(self.token))
-            if resp.status_code != 200:
-                # try without version number
-                res_url = urljoin(self.config.bioregistry_host, '/api/tool/{0}'.format(tool_id))
-                resp = requests.get(res_url, headers=_build_request_headers(self.token))
-            # finally check if a result has been found
-            if resp.status_code == 200:
-                biotool = resp.json()
-                logger.debug('{0} in {1}: {2}'.format(tool_collectionID, biotool.get(
-                    'collectionID', []), tool_collectionID in biotool.get('collectionID', [])))
-                if tool_collectionID in biotool.get('collectionID', []):
+            tool = self.find_elixir_tool(tool_id, tool_version)
+            if tool:
+                logger.debug('{0} in {1}: {2}'.format(tool_collectionID, tool.get(
+                    'collectionID', []), tool_collectionID in tool.get('collectionID', [])))
+                if tool_collectionID in tool.get('collectionID', []):
                     logger.debug("removing resource " + tool_id)
                     resp = requests.delete(
-                        res_url, headers=_build_request_headers(self.token))
+                        self.config.bioregistry_host, headers=_build_request_headers(self.token))
                     if resp.status_code == 204:
                         logger.debug("{0} ok".format(tool_id))
                     else:

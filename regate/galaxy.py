@@ -12,24 +12,16 @@ from bioblend.galaxy import GalaxyInstance as _GalaxyInstance
 from bioblend.galaxy.objects import GalaxyInstance as _GalaxyObjectInstance
 
 from regate.const import _RESOURCE_TYPE
+from regate.objects import Platform
 
 logger = logging.getLogger()
 
 
-class GalaxyPlatform(object):
-    __instance = None
-
-    @staticmethod
-    def getInstance():
-        if not GalaxyPlatform.__instance:
-            GalaxyPlatform()
-        return GalaxyPlatform.__instance
-
+class GalaxyPlatform(Platform):
     def __init__(self):
-        if GalaxyPlatform.__instance:
-            raise Exception("Singleton class: an instance of this class already exists!")
-        GalaxyPlatform.__instance = self
+        super().__init__()
         self._galaxy_instance = None
+        self._galaxy_instance_obj = None
 
     @property
     def api(self):

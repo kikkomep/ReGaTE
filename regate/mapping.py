@@ -116,7 +116,7 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
         ])
 
     ##### Download GROUP ######################################################################################
-    tool_archive = GalaxyPlatform.getInstance().get_galaxy_tool_wrapper_archive(galaxy_metadata['id'])
+    tool_archive = GalaxyPlatform.get_instance().get_galaxy_tool_wrapper_archive(galaxy_metadata['id'])
     if tool_archive:
         mapping['download'].extend([
             {
