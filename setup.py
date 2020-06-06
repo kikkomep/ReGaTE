@@ -17,7 +17,7 @@ setup(
     author='Olivia Doppelt-Azeroual and Fabien Mareuil',
     author_email='olivia.doppelt@pasteur.fr and fabien.mareuil@pasteur.fr',
     url='https://github.com/bioinfo-center-pasteur-fr/ReGaTE',
-    packages=['regate'],
+    packages=['regate', 'regate.cli'],
     install_requires=[
         'ruamel.yaml',
         'html5lib',
