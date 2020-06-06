@@ -8,13 +8,34 @@ from regate.edam import get_data_path
 logger = logging.getLogger()
 
 
+def load_config(options):
+    if not os.path.exists(options.config_file):
+        raise IOError("{0} doesn't exist".format(options.config_file))
+    config = Config(options.config_file, "regate", options)
+    logger.debug("Configuration file: %r", config)
+    return config
+
+
+def generate_template(filename="regate.ini"):
+    """
+    :return:
+    """
+    if os.path.exists(filename):
+        raise FileExistsError("Filename '%s' already exists!", filename)
+    template_config = get_data_path('regate.ini')
+    with open(template_config, 'r') as configtemplate:
+        with open(filename, 'w') as fp:
+            for line in configtemplate:
+                fp.write(line)
+
+
 class Config(object):
     """
     class config to parse and check the config.ini file
     """
 
     def __init__(self, configfile, script, options):
-        self.conf = load_configuration(configfile)
+        self.conf = self.load_configuration(configfile)
         self.galaxy_url_api = self.assign("galaxy_server", "galaxy_url_api", ismandatory=True)
         self.api_key = self.assign("galaxy_server", "api_key", ismandatory=True)
         if script == "regate":
@@ -61,6 +82,16 @@ class Config(object):
             self.edam_file = self.assign("remag_specific_section", "edam_file", ismandatory=True)
             self.output_yaml = self.assign("remag_specific_section", "output_yaml", ismandatory=True)
 
+    @classmethod
+    def load_configuration(cls, configfile):
+        """
+        :param configfile:
+        :return:
+        """
+        configuration = configparser.ConfigParser()
+        configuration.read(configfile)
+        return configuration
+
     def assign(self, section, key, ismandatory=True, message=None, boolean=False):
         """
             return value if key exists in config.ini file or an error or None if not, depending on whether the option
@@ -97,34 +128,3 @@ class Config(object):
             return True
         else:
             return False
-
-
-def load_configuration(configfile):
-    """
-    :param configfile:
-    :return:
-    """
-    configuration = configparser.ConfigParser()
-    configuration.read(configfile)
-    return configuration
-
-
-def load_config(options):
-    if not os.path.exists(options.config_file):
-        raise IOError("{0} doesn't exist".format(options.config_file))
-    config = Config(options.config_file, "regate", options)
-    logger.debug("Configuration file: %r", config)
-    return config
-
-
-def generate_template(filename="regate.ini"):
-    """
-    :return:
-    """
-    if os.path.exists(filename):
-        raise FileExistsError("Filename '%s' already exists!", filename)
-    template_config = get_data_path('regate.ini')
-    with open(template_config, 'r') as configtemplate:
-        with open(filename, 'w') as fp:
-            for line in configtemplate:
-                fp.write(line)
