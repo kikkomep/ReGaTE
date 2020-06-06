@@ -155,26 +155,3 @@ def _build_request_headers(token=None):
         return {'Accept': 'application/json', 'Content-type': 'application/json',
                 'Authorization': 'Token {0}'.format(token)}
     return {'Accept': 'application/json', 'Content-type': 'application/json'}
-
-
-def auth(login, host, ssl_verify):
-    """
-    :param login:
-    :return:
-    """
-    key = None
-    while key is None:
-        questions = [
-            {
-                'type': 'password',
-                'qmark': ">",
-                'message': "Enter the password for the BioTools user '{}':".format(login),
-                'name': 'password'
-            }
-        ]
-        answers = prompt(questions)
-        url = host + '/api/rest-auth/login/'
-        resp = requests.post(url, '{{"username": "{0}","password": "{1}"}}'.format(login, answers["password"]),
-                             headers=_build_request_headers(), verify=ssl_verify)
-        key = resp.json().get('key')
-    return key
