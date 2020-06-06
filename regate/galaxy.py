@@ -1,0 +1,291 @@
+import collections
+import json
+import logging
+import os
+import re
+import tarfile
+import tempfile
+from xml.etree import ElementTree as ET
+
+from bioblend import ConnectionError
+from bioblend.galaxy import GalaxyInstance as _GalaxyInstance
+from bioblend.galaxy.objects import GalaxyInstance as _GalaxyObjectInstance
+
+from regate.const import _RESOURCE_TYPE
+
+logger = logging.getLogger()
+
+
+class GalaxyPlatform(object):
+    __instance = None
+
+    @staticmethod
+    def getInstance():
+        if not GalaxyPlatform.__instance:
+            GalaxyPlatform()
+        return GalaxyPlatform.__instance
+
+    def __init__(self):
+        if GalaxyPlatform.__instance:
+            raise Exception("Singleton class: an instance of this class already exists!")
+        GalaxyPlatform.__instance = self
+        self._galaxy_instance = None
+
+    @property
+    def api(self):
+        if not self._galaxy_instance:
+            raise Exception("Bioblend API not initialized")
+        return self._galaxy_instance
+
+    def configure(self, galaxy_url, galaxy_api_key):
+        self._galaxy_instance = _GalaxyInstance(galaxy_url, key=galaxy_api_key)
+        self._galaxy_instance_obj = _GalaxyObjectInstance(galaxy_url, galaxy_api_key)
+        self._galaxy_instance.verify = False
+
+    def get_tool(self, id):
+        try:
+            metadata = self.api.tools.show_tool(tool_id=id, io_details=True, link_details=True)
+            tool_config = self.get_galaxy_tool_wrapper_config(metadata)
+            if tool_config:
+                metadata['config'] = tool_config
+            return metadata
+        except ConnectionError as e:
+            if e.status_code == 404:
+                logger.warning("Unable to find the tool '%r' on the Galaxy platform @ '%s'", id, self.api.base_url)
+            else:
+                logger.error("Error during connection with exposed API method for tool {0}".format(str(id)), exc_info=True)
+            if logger.level == logging.DEBUG:
+                logger.exception(e)
+            return None
+
+    def get_tools(self, ids=None, ignore=None, details=False):
+        tools_metadata = []
+        # List of tools to retrieve
+        galaxy_tools = ids
+        if ids and isinstance(ids, str):
+            galaxy_tools = [{'id': tool_id} for tool_id in ids.split(",")]
+        elif not ids:
+            # Retrieve all available tools in the Galaxy platform
+            try:
+                galaxy_tools = self.api.tools.get_tools()
+                # Ensure the list doesn't contain diplicates checking ID and version
+                detect_toolid_duplicate(galaxy_tools)
+            except ConnectionError as e:
+                raise ConnectionError("Connection with the Galaxy server {0} failed, {1}".format(self.api.base_url, e))
+
+        if galaxy_tools:
+            # Set list of tools to be ignored
+            ignore_list = ignore.split(',') if ignore else []
+            # Load tools details
+            for tool in galaxy_tools:
+                if not tool['id'] in ignore_list:
+                    if details:
+                        tool = self.get_tool(tool['id'])
+                        if tool:
+                            tools_metadata.append(tool)
+                    else:
+                        tools_metadata.append(tool)
+        tools_metadata.sort(key=lambda x: x['name'])
+        return tools_metadata
+
+    def get_galaxy_tool_wrapper_archive(self, tool_id):
+        try:
+            tool_url = '{}/{}/download'.format(self.api.tools.url, tool_id)
+            r = self.api.tools._get(url=tool_url, json=False)
+            if r.status_code == 200:
+                return r.content
+        except Exception as e:
+            if logger.level == logging.DEBUG:
+                logger.exception(e)
+        return None
+
+    def get_galaxy_tool_wrapper_config(self, tool_metadata):
+        temp = tempfile.NamedTemporaryFile()
+        temp_dir = tempfile.TemporaryDirectory()
+        try:
+            archive = self.get_galaxy_tool_wrapper_archive(tool_metadata['id'])
+            if archive:
+                with open(temp.name, "wb") as out:
+                    out.write(archive)
+                tar_archive = tarfile.open(temp.name, 'r:gz')
+                filename_pattern = re.compile(r"^({}|{})\.xml$".format(
+                    tool_metadata['id'],
+                    tool_metadata['tool_shed_repository']['name']
+                    if "tool_shed_repository" in tool_metadata and "name" in tool_metadata['tool_shed_repository']
+                    else tool_metadata['name']))
+                files = [f for f in tar_archive.getnames()]
+                logger.debug("List of files: %r", files)
+                if len(files) == 0:
+                    logger.debug("No file found on the archive of the galaxy tool wrapper '%s'!", tool_metadata['id'])
+                    return None
+                elif len(files) > 1:
+                    files = [f for f in tar_archive.getnames() if filename_pattern.match(f)]
+                    if len(files) == 0 or len(files) > 1:
+                        logger.debug("Unable to detect the wrapper config file for tool '%s'", tool_metadata['id'])
+                        logger.debug("Files %r (%r)", files, filename_pattern.pattern)
+                        return None
+                tar_archive.extractall(path=temp_dir.name)
+                xml_filename = os.path.join(temp_dir.name, files[0])
+                xml_config = ET.parse(xml_filename)
+                root = xml_config.getroot()
+                return {
+                    'command': root.find("command").text,
+                    'help': root.find("help").text if root.find("help") else "",
+                }
+        finally:
+            temp.close()
+            temp_dir.cleanup()
+
+    def get_workflow(self, workflow_id, details=False, step_tools_details=False):
+        try:
+            workflows = self.api.workflows.get_workflows()
+            for wf in workflows:
+                wf['uuid'] = wf['latest_workflow_uuid']
+                if wf['latest_workflow_uuid'] == workflow_id:
+                    if wf and details:
+                        if not step_tools_details:
+                            return self.api.workflows.export_workflow_dict(wf['id'])
+                        else:
+                            return self._load_workflow_details(wf['id'], load_io_details=step_tools_details)
+                    return wf
+            return None
+        except ConnectionError as e:
+            logger.error("Error during connection with exposed API method for workflow {0}".format(workflow_id, exc_info=True))
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+            return None
+
+    def get_workflows(self, ids=None, ignore=None, details=False):
+        workflows_metadata = []
+        # build the list of workflows to export
+        galaxy_workflows = ids
+        if ids and isinstance(ids, str):
+            galaxy_workflows = [{'uuid': workflow_id} for workflow_id in ids.split(",")]
+        elif not ids:
+            # Retrieve all available tools in the Galaxy platform
+            try:
+                galaxy_workflows = self.api.workflows.get_workflows()
+                # Ensure the list doesn't contain diplicates checking ID and version
+                # detect_toolid_duplicate(galaxy_workflows)
+            except ConnectionError as e:
+                raise ConnectionError("Connection with the Galaxy server {0} failed, {1}".format(self.api.base_url, e))
+        # Load workdlows details
+        if galaxy_workflows:
+            # Define list of workflows to be ignored
+            ignore_list = ignore.split(',') if ignore else []
+            # Load workflow details
+            for wf in galaxy_workflows:
+                if not 'uuid' in wf and 'latest_workflow_uuid' in wf:
+                    wf['uuid'] = wf['latest_workflow_uuid']
+                if not wf['uuid'] in ignore_list:
+                    # if not details:
+                    #     workflows_metadata.append(wf)
+                    # else:
+                    workflow_metadata = self._load_workflow_details(wf['uuid'], load_io_details=details)
+                    if workflow_metadata:
+                        workflows_metadata.append(workflow_metadata)
+        workflows_metadata.sort(key=lambda x: x["name"])
+        return workflows_metadata
+
+    def _load_workflow_details(self, workflow_uuid, load_io_details=True):
+        try:
+            workflow_metadata = None
+            workflows = self.api.workflows.get_workflows()
+            for wf in workflows:
+                wf['uuid'] = wf['latest_workflow_uuid']
+                if wf['latest_workflow_uuid'] == workflow_uuid:
+                    workflow_metadata = wf
+                    break
+            if not workflow_metadata:
+                return None
+            workflow_obj = self._galaxy_instance_obj.workflows.get(workflow_metadata['id'])
+            workflow_metadata = workflow_obj.export()
+            if load_io_details:
+                workflow_io_details = [
+                    ('inputs', list(workflow_obj.inputs)),
+                    ('outputs', workflow_obj.sink_ids),
+                    ('operations', set(workflow_obj.steps) - workflow_obj.sink_ids - set(workflow_obj.inputs))
+                ]
+                for collection, _ in workflow_io_details:
+                    if not collection in workflow_metadata:
+                        workflow_metadata[collection] = []
+                for collection, steps in workflow_io_details:
+                    for step in steps:
+                        step_metadata = workflow_obj.steps[step]
+                        if step_metadata.tool_id:
+                            tool_step = self.get_tool(step_metadata.tool_id)
+                            if not tool_step:
+                                logger.error("Unable to load metadata of tools related with step %r", step_metadata.id)
+                                return None
+                            else:
+                                workflow_metadata[collection].append(tool_step)
+            return workflow_metadata
+        except ConnectionError as e:
+            logger.error("Error during connection with exposed API method for workflow {0}".format(workflow_uuid), exc_info=True)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+
+    def import_workflow(self, workflow_or_filename):
+        try:
+            data_json = workflow_or_filename
+            if isinstance(workflow_or_filename, str) and os.path.isfile(workflow_or_filename):
+                with open(workflow_or_filename) as data_file:
+                    data_json = json.load(data_file)
+            self.api.workflows.import_workflow_dict(data_json, publish=True)
+        except ConnectionError as e:
+            logger.error("Galaxy import error for workflow in the '%s' JSON file", workflow_or_filename)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+
+    def import_tool(self, tool_or_filename):
+        try:
+            data_json = tool_or_filename
+            if isinstance(tool_or_filename, str):
+                with open(tool_or_filename) as data_file:
+                    data_json = json.load(data_file)
+            if "tool_shed_repository" in data_json:
+                toolshed = data_json["tool_shed_repository"]
+                self.api.toolShed.install_repository_revision(
+                    tool_shed_url="https://{}".format(toolshed["tool_shed"]),
+                    name=toolshed["name"],
+                    owner=toolshed["owner"],
+                    changeset_revision=toolshed["changeset_revision"],
+                    install_tool_dependencies=False,
+                    install_repository_dependencies=False,
+                    install_resolver_dependencies=False,
+                    tool_panel_section_id=None,
+                    new_tool_panel_section_label=data_json["panel_section_name"]
+                )
+            else:
+                logger.error("Unable to find ToolShed repository info for tool '%s'", data_json["name"])
+        except ConnectionError as e:
+            logger.error("Galaxy import error for workflow in the '%s' JSON file", tool_or_filename)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+
+
+def detect_toolid_duplicate(tool_list):
+    id_list = list()
+    for tool in tool_list:
+        id_list.append(build_filename(tool['id'], tool['version']))
+
+    duplicate_tools = [item for item, count in list(collections.Counter(id_list).items()) if count > 1]
+    if duplicate_tools:
+        for dup in duplicate_tools:
+            logger.warning("The tool {0} is present multiple times on this instance with the same version.".format(dup))
+
+
+def build_filename(tool_id, version):
+    try:
+        try:
+            source = str.split(tool_id, '/')[-2]
+        except IndexError:
+            source = tool_id
+        return source + "_" + str(version)
+    except ValueError:
+        logger.warning("ValueError:", tool_id)
+        return ""
+
+
+def get_galaxy_resource_id_label(resource_type):
+    return 'uuid' if resource_type == _RESOURCE_TYPE.WORKFLOW else 'id'
