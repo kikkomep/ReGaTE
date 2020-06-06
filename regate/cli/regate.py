@@ -97,7 +97,7 @@ def export_from_galaxy(options):
         if len(biotools_json_files) == 0:
             print(warning("\n  WARNING: no resource to publish on the ELIXIR registry '{}'\n".format(config.bioregistry_host)))
         else:
-            _push_to_elix(config, biotools_json_files, config.resourcename)
+            push_to_biotools(config, biotools_json_files, config.resourcename)
 
 
 def export_galaxy_resources(config, resource_type, resources_filter=None, ignore_list=None):
@@ -187,7 +187,7 @@ def export_from_biotools(options):
         # Build list of BioTools JSON files to publish
         galaxy_json_files = [resource[REGATE_DATA_FILE] for resource in tools] + \
                             [resource[REGATE_DATA_FILE] for resource in workflows]
-        _push_to_galaxy(config, galaxy_json_files, check_exists=True)
+        push_to_galaxy(config, galaxy_json_files, check_exists=True)
 
 
 def export_biotools_resources(config, resource_type, resource_filter=None):
@@ -367,9 +367,9 @@ def push_to_target_platform(options):
         print(warning("\n  WARNING: no resource to publish on the bio.tools registry '{}'\n".format(config.bioregistry_host)))
     else:
         if options.platform == _ALLOWED_SOURCES.BIOTOOLS.value:
-            _push_to_elix(config, biotools_json_files, config.resourcename)
+            push_to_biotools(config, biotools_json_files, config.resourcename)
         else:
-            _push_to_galaxy(config, biotools_json_files, check_exists=True)
+            push_to_galaxy(config, biotools_json_files, check_exists=True)
 
 
 def biotools_authenticate(config):
@@ -392,7 +392,7 @@ def biotools_authenticate(config):
     return key
 
 
-def _push_to_elix(config, biotools_json_data_list, resourcename):
+def push_to_biotools(config, biotools_json_data_list, resourcename):
     """
     :param login:
     :param tool_dir:
@@ -439,7 +439,7 @@ def _push_to_elix(config, biotools_json_data_list, resourcename):
     return success, errors
 
 
-def _push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
+def push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
     # Init Galaxy
     gi = GalaxyPlatform.get_instance()
     gi.configure(config.galaxy_url, config.api_key)
@@ -479,7 +479,6 @@ def _push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
                         logger.info("Tool %s [version %s] already exists", resource_id, resource['version'])
                         print_exists()
                         continue
-                    print("Importing tool", resource)
                     if resources == tools:
                         gi.import_tool(resource)
                     else:
