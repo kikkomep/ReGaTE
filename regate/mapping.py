@@ -130,7 +130,7 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
             },
             {
                 'type': 'Tool wrapper (galaxy)',
-                'url': build_download_link(conf, json.dumps(galaxy_metadata),
+                'url': build_download_link(conf, galaxy_metadata.to_json(),
                                            filename="{}.json".format(galaxy_metadata['id']),
                                            mimetype="application/json"),
                 'note': "JSON representation of the Galaxy tool as base64 encoded data URI on the 'data' URL parameter.",
