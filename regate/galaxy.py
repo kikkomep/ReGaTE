@@ -23,6 +23,10 @@ class Tool(BaseTool):
 
 class Workflow(BaseWorkflow):
 
+    def __init__(self, platform, data):
+        super().__init__(platform, data)
+        if "uuid" not in data and 'latest_workflow_uuid' in data:
+            self.uuid = data['latest_workflow_uuid']
     @property
     def id(self):
         return self.uuid
