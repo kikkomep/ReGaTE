@@ -8,36 +8,6 @@ from Cheetah.Template import Template
 from regate.edam import get_data_path
 
 
-class DynamicObject(dict):
-    def __init__(self, properties=None):
-        super().__init__()
-        if properties is None:
-            properties = {}
-        self.existing = "Still Here"
-        self.merge(properties)
-
-    def __getattr__(self, name):
-        return self.__dict__[name]
-
-    def __setattr__(self, name, value):
-        self.__dict__[name] = value
-
-    def __contains__(self, key):
-        return key in self.__dict__
-
-    def __str__(self):
-        return self.__dict__.__str__()
-
-    def __repr__(self):
-        return "{}({})".format(self.__class__.__name__, self.__dict__.__repr__())
-
-    def merge(self, properties):
-        if not isinstance(properties, dict):
-            raise TypeError("'properties' should be a dict")
-        for k, v in properties.items():
-            self.__setattr__(k, v)
-
-
 def write_json_files(tool_name, general_dict, tool_dir):
     """
     :param tool_name:
