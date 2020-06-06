@@ -32,5 +32,3 @@ class _ALLOWED_COMMANDS(Enum):
     @staticmethod
     def values():
         return [o.value for o in _ALLOWED_COMMANDS]
-
-

@@ -8,11 +8,24 @@ import requests
 from urllib.parse import urljoin
 
 from regate.cli.helpers import prompt
+from regate.objects import Tool as BaseTool, Workflow as BaseWorkflow
 from regate.const import _RESOURCE_TYPE
 from regate.mapping import find_biotools_regate_id
 from regate.objects import Platform
 
 logger = logging.getLogger()
+
+
+class Tool(BaseTool):
+    @property
+    def id(self):
+        return self["biotoolsID"]
+
+
+class Workflow(BaseWorkflow):
+    @property
+    def id(self):
+        return self["biotoolsID"]
 
 
 class BioToolsPlatform(Platform):
@@ -47,6 +60,10 @@ class BioToolsPlatform(Platform):
                              headers=_build_request_headers(), verify=ssl_verify)
         self.__token = resp.json().get('key')
         return self.__token is not None
+
+    def _wrap_biotools_resource(self, resource):
+        if resource:
+            return Workflow(self, resource) if resource['toolType'] == 'Workflow' else Tool(self, resource)
 
     def get_tool(self, identifier):
         return self.find_elixir_tool(identifier)
@@ -88,7 +105,9 @@ class BioToolsPlatform(Platform):
                 if resp.status_code == 200:
                     # filter tools by otherID == biotools:regate_
                     response_json = resp.json()
-                    tools = [t for t in response_json["list"] if not only_regate_tools or find_biotools_regate_id(t)]
+                    tools = [self._wrap_biotools_resource(t)
+                             for t in response_json["list"]
+                             if not only_regate_tools or find_biotools_regate_id(t)]
                     if not tools_list:
                         result.extend(tools)
                     else:
@@ -140,13 +159,13 @@ class BioToolsPlatform(Platform):
             res_url = urljoin(self.config.bioregistry_host, '/api/tool/{0}'.format(tool_id))
             resp = requests.get(res_url, headers=_build_request_headers(self.token))
             if resp.status_code == 200:
-                return resp.json()
+                return self._wrap_biotools_resource(resp.json())
             # try first with version number if provided
             if tool_version:
                 res_url = urljoin(self.config.bioregistry_host, '/api/tool/{0}/version/{1}'.format(tool_id, tool_version))
                 resp = requests.get(res_url, headers=_build_request_headers(self.token))
                 if resp.status_code == 200:
-                    return resp.json()
+                    return self._wrap_biotools_resource(resp.json())
         except Exception as e:
             logger.error("Error removing resource {0}".format(tool_id), exc_info=True)
         return None
