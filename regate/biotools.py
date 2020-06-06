@@ -153,18 +153,28 @@ class BioToolsPlatform(Platform):
 
     def remove_existing_elixir_tool_version(self, tool_id, tool_version, tool_collectionID):
         try:
-            tool = self.find_elixir_tool(tool_id, tool_version)
+            # try without version number
+            tool = None
+            res_url = urljoin(self.config.bioregistry_host, '/api/tool/{0}'.format(tool_id))
+            resp = requests.get(res_url, headers=_build_request_headers(self.token))
+            if resp.status_code == 200:
+                tool = resp.json()
+            # try first with version number if provided
+            if tool_version and not tool:
+                res_url = urljoin(self.config.bioregistry_host, '/api/tool/{0}/version/{1}'.format(tool_id, tool_version))
+                resp = requests.get(res_url, headers=_build_request_headers(self.token))
+                if resp.status_code == 200:
+                    tool = resp.json()
             if tool:
-                logger.debug('{0} in {1}: {2}'.format(tool_collectionID, tool.get(
-                    'collectionID', []), tool_collectionID in tool.get('collectionID', [])))
+                logger.debug('{0} in {1}: {2}'.format(tool_id, tool_collectionID,
+                                                      tool_collectionID in tool.get('collectionID', [])))
                 if tool_collectionID in tool.get('collectionID', []):
                     logger.debug("removing resource " + tool_id)
-                    resp = requests.delete(
-                        self.config.bioregistry_host, headers=_build_request_headers(self.token))
+                    resp = requests.delete(res_url, headers=_build_request_headers(self.token))
                     if resp.status_code == 204:
                         logger.debug("{0} ok".format(tool_id))
                     else:
-                        logger.error("{0} ko, error: {1} {2} (code: {3})".format(tool_id, resp.text, resp.status_code))
+                        logger.error("{0} ko, error: {1} (code: {2})".format(tool_id, resp.text, resp.status_code))
         except Exception:
             logger.error("Error removing resource {0}".format(tool_id), exc_info=True)
 
