@@ -172,7 +172,7 @@ class GalaxyPlatform(Platform):
             ignore_list = ignore.split(',') if ignore else []
             # Load workflow details
             for wf in galaxy_workflows:
-                if not 'uuid' in wf and 'latest_workflow_uuid' in wf:
+                if 'uuid' not in wf and 'latest_workflow_uuid' in wf:
                     wf['uuid'] = wf['latest_workflow_uuid']
                 if not wf['uuid'] in ignore_list:
                     workflow_metadata = self._load_workflow_details(wf['uuid'], load_io_details=details)
