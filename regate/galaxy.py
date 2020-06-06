@@ -12,9 +12,20 @@ from bioblend.galaxy import GalaxyInstance as _GalaxyInstance
 from bioblend.galaxy.objects import GalaxyInstance as _GalaxyObjectInstance
 
 from regate.const import _RESOURCE_TYPE
-from regate.objects import Platform
+from regate.objects import Platform, Tool as BaseTool, Workflow as BaseWorkflow
 
 logger = logging.getLogger()
+
+
+class Tool(BaseTool):
+    pass
+
+
+class Workflow(BaseWorkflow):
+
+    @property
+    def id(self):
+        return self.uuid
 
 
 class GalaxyPlatform(Platform):
@@ -40,7 +51,7 @@ class GalaxyPlatform(Platform):
             tool_config = self.get_galaxy_tool_wrapper_config(metadata)
             if tool_config:
                 metadata['config'] = tool_config
-            return metadata
+            return Tool(self, metadata)
         except ConnectionError as e:
             if e.status_code == 404:
                 logger.warning("Unable to find the tool '%r' on the Galaxy platform @ '%s'", identifier, self.api.base_url)
@@ -64,20 +75,23 @@ class GalaxyPlatform(Platform):
                 detect_toolid_duplicate(galaxy_tools)
             except ConnectionError as e:
                 raise ConnectionError("Connection with the Galaxy server {0} failed, {1}".format(self.api.base_url, e))
-
-        if galaxy_tools:
-            # Set list of tools to be ignored
-            ignore_list = ignore.split(',') if ignore else []
-            # Load tools details
-            for tool in galaxy_tools:
-                if not tool['id'] in ignore_list:
-                    if details:
-                        tool = self.get_tool(tool['id'])
-                        if tool:
-                            tools_metadata.append(tool)
-                    else:
-                        tools_metadata.append(tool)
-        tools_metadata.sort(key=lambda x: x['name'])
+        try:
+            if galaxy_tools:
+                # Set list of tools to be ignored
+                ignore_list = ignore.split(',') if ignore else []
+                # Load tools details
+                for tool in galaxy_tools:
+                    if not tool['id'] in ignore_list:
+                        if details:
+                            tool = self.get_tool(tool['id'])
+                            if tool:
+                                tools_metadata.append(tool)
+                        else:
+                            tools_metadata.append(tool if isinstance(tool, Tool) else Tool(self, tool))
+            tools_metadata.sort(key=lambda x: x['name'])
+        except Exception as e:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
         return tools_metadata
 
     def get_galaxy_tool_wrapper_archive(self, tool_id):
@@ -126,7 +140,7 @@ class GalaxyPlatform(Platform):
             for wf in workflows:
                 wf['uuid'] = wf['latest_workflow_uuid']
                 if wf['latest_workflow_uuid'] == identifier:
-                    return self._load_workflow_details(wf['uuid'], load_io_details=details)
+                    return Workflow(self, self._load_workflow_details(wf['uuid'], load_io_details=details))
             return None
         except ConnectionError as e:
             logger.error("Error during connection with exposed API method for workflow {0}".format(identifier, exc_info=True))
@@ -157,12 +171,9 @@ class GalaxyPlatform(Platform):
                 if not 'uuid' in wf and 'latest_workflow_uuid' in wf:
                     wf['uuid'] = wf['latest_workflow_uuid']
                 if not wf['uuid'] in ignore_list:
-                    # if not details:
-                    #     workflows_metadata.append(wf)
-                    # else:
                     workflow_metadata = self._load_workflow_details(wf['uuid'], load_io_details=details)
                     if workflow_metadata:
-                        workflows_metadata.append(workflow_metadata)
+                        workflows_metadata.append(Workflow(self, workflow_metadata))
         workflows_metadata.sort(key=lambda x: x["name"])
         return workflows_metadata
 
