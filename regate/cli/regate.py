@@ -430,7 +430,7 @@ def _push_to_elix(config, biotools_json_data_list, resourcename):
             success.append(json_data)
             print_done()
         except Exception as e:
-            logger.error("{0} ko, error: {1}".format(json_data["name"], e.message))
+            logger.error("{0} ko, error".format(json_data["name"]))
             errors.append(json_data)
             print_error()
             if logger.isEnabledFor(logging.DEBUG):
