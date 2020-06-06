@@ -100,30 +100,22 @@ class GalaxyPlatform(Platform):
                 with open(temp.name, "wb") as out:
                     out.write(archive)
                 tar_archive = tarfile.open(temp.name, 'r:gz')
-                filename_pattern = re.compile(r"^({}|{})\.xml$".format(
-                    tool_metadata['id'],
-                    tool_metadata['tool_shed_repository']['name']
-                    if "tool_shed_repository" in tool_metadata and "name" in tool_metadata['tool_shed_repository']
-                    else tool_metadata['name']))
-                files = [f for f in tar_archive.getnames()]
-                logger.debug("List of files: %r", files)
-                if len(files) == 0:
-                    logger.debug("No file found on the archive of the galaxy tool wrapper '%s'!", tool_metadata['id'])
-                    return None
-                elif len(files) > 1:
-                    files = [f for f in tar_archive.getnames() if filename_pattern.match(f)]
-                    if len(files) == 0 or len(files) > 1:
-                        logger.debug("Unable to detect the wrapper config file for tool '%s'", tool_metadata['id'])
-                        logger.debug("Files %r (%r)", files, filename_pattern.pattern)
-                        return None
-                tar_archive.extractall(path=temp_dir.name)
-                xml_filename = os.path.join(temp_dir.name, files[0])
-                xml_config = ET.parse(xml_filename)
-                root = xml_config.getroot()
-                return {
-                    'command': root.find("command").text,
-                    'help': root.find("help").text if root.find("help") else "",
-                }
+                if "config_file" in tool_metadata:
+                    config_file = os.path.basename(tool_metadata['config_file'])
+                    tar_archive.extractall(path=temp_dir.name)
+                    xml_filename = os.path.join(temp_dir.name, config_file)
+                    xml_config = ET.parse(xml_filename)
+                    root = xml_config.getroot()
+                    return {
+                        'command': root.find("command").text,
+                        'help': root.find("help").text if root.find("help") else "",
+                    }
+                else:
+                    logger.debug("Unable to detect the wrapper config file for tool '%s'", tool_metadata['id'])
+        except Exception as e:
+            logger.debug("Unable to detect the wrapper config file for tool '%s'", tool_metadata['id'])
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
         finally:
             temp.close()
             temp_dir.cleanup()
