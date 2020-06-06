@@ -42,29 +42,29 @@ class GalaxyPlatform(object):
         self._galaxy_instance_obj = _GalaxyObjectInstance(galaxy_url, galaxy_api_key)
         self._galaxy_instance.verify = False
 
-    def get_tool(self, id):
+    def get_tool(self, identifier):
         try:
-            metadata = self.api.tools.show_tool(tool_id=id, io_details=True, link_details=True)
+            metadata = self.api.tools.show_tool(tool_id=identifier, io_details=True, link_details=True)
             tool_config = self.get_galaxy_tool_wrapper_config(metadata)
             if tool_config:
                 metadata['config'] = tool_config
             return metadata
         except ConnectionError as e:
             if e.status_code == 404:
-                logger.warning("Unable to find the tool '%r' on the Galaxy platform @ '%s'", id, self.api.base_url)
+                logger.warning("Unable to find the tool '%r' on the Galaxy platform @ '%s'", identifier, self.api.base_url)
             else:
-                logger.error("Error during connection with exposed API method for tool {0}".format(str(id)), exc_info=True)
+                logger.error("Error during connection with exposed API method for tool {0}".format(str(identifier)), exc_info=True)
             if logger.level == logging.DEBUG:
                 logger.exception(e)
             return None
 
-    def get_tools(self, ids=None, ignore=None, details=False):
+    def get_tools(self, identifier_list=None, ignore=None, details=False):
         tools_metadata = []
         # List of tools to retrieve
-        galaxy_tools = ids
-        if ids and isinstance(ids, str):
-            galaxy_tools = [{'id': tool_id} for tool_id in ids.split(",")]
-        elif not ids:
+        galaxy_tools = identifier_list
+        if identifier_list and isinstance(identifier_list, str):
+            galaxy_tools = [{'id': tool_id} for tool_id in identifier_list.split(",")]
+        elif not identifier_list:
             # Retrieve all available tools in the Galaxy platform
             try:
                 galaxy_tools = self.api.tools.get_tools()
@@ -136,32 +136,27 @@ class GalaxyPlatform(object):
             temp.close()
             temp_dir.cleanup()
 
-    def get_workflow(self, workflow_id, details=False, step_tools_details=False):
+    def get_workflow(self, identifier, details=False):
         try:
             workflows = self.api.workflows.get_workflows()
             for wf in workflows:
                 wf['uuid'] = wf['latest_workflow_uuid']
-                if wf['latest_workflow_uuid'] == workflow_id:
-                    if wf and details:
-                        if not step_tools_details:
-                            return self.api.workflows.export_workflow_dict(wf['id'])
-                        else:
-                            return self._load_workflow_details(wf['id'], load_io_details=step_tools_details)
-                    return wf
+                if wf['latest_workflow_uuid'] == identifier:
+                    return self._load_workflow_details(wf['uuid'], load_io_details=details)
             return None
         except ConnectionError as e:
-            logger.error("Error during connection with exposed API method for workflow {0}".format(workflow_id, exc_info=True))
+            logger.error("Error during connection with exposed API method for workflow {0}".format(identifier, exc_info=True))
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
             return None
 
-    def get_workflows(self, ids=None, ignore=None, details=False):
+    def get_workflows(self, identifier_list=None, ignore=None, details=False):
         workflows_metadata = []
         # build the list of workflows to export
-        galaxy_workflows = ids
-        if ids and isinstance(ids, str):
-            galaxy_workflows = [{'uuid': workflow_id} for workflow_id in ids.split(",")]
-        elif not ids:
+        galaxy_workflows = identifier_list
+        if identifier_list and isinstance(identifier_list, str):
+            galaxy_workflows = [{'uuid': workflow_id} for workflow_id in identifier_list.split(",")]
+        elif not identifier_list:
             # Retrieve all available tools in the Galaxy platform
             try:
                 galaxy_workflows = self.api.workflows.get_workflows()
@@ -225,23 +220,23 @@ class GalaxyPlatform(object):
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
 
-    def import_workflow(self, workflow_or_filename):
+    def import_workflow(self, dict_or_filename):
         try:
-            data_json = workflow_or_filename
-            if isinstance(workflow_or_filename, str) and os.path.isfile(workflow_or_filename):
-                with open(workflow_or_filename) as data_file:
+            data_json = dict_or_filename
+            if isinstance(dict_or_filename, str) and os.path.isfile(dict_or_filename):
+                with open(dict_or_filename) as data_file:
                     data_json = json.load(data_file)
             self.api.workflows.import_workflow_dict(data_json, publish=True)
         except ConnectionError as e:
-            logger.error("Galaxy import error for workflow in the '%s' JSON file", workflow_or_filename)
+            logger.error("Galaxy import error for workflow in the '%s' JSON file", dict_or_filename)
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
 
-    def import_tool(self, tool_or_filename):
+    def import_tool(self, dict_or_filename):
         try:
-            data_json = tool_or_filename
-            if isinstance(tool_or_filename, str):
-                with open(tool_or_filename) as data_file:
+            data_json = dict_or_filename
+            if isinstance(dict_or_filename, str):
+                with open(dict_or_filename) as data_file:
                     data_json = json.load(data_file)
             if "tool_shed_repository" in data_json:
                 toolshed = data_json["tool_shed_repository"]
@@ -259,7 +254,7 @@ class GalaxyPlatform(object):
             else:
                 logger.error("Unable to find ToolShed repository info for tool '%s'", data_json["name"])
         except ConnectionError as e:
-            logger.error("Galaxy import error for workflow in the '%s' JSON file", tool_or_filename)
+            logger.error("Galaxy import error for workflow in the '%s' JSON file", dict_or_filename)
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
 

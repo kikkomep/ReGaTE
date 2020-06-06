@@ -27,7 +27,8 @@ from regate.galaxy import GalaxyPlatform, build_filename, get_galaxy_resource_id
 from regate.cli.helpers import warning, failure, bold, print_done, print_error, print_exists, prompt, print_logo, build_cli_parser, \
     prompt_platform_resource_selection
 from regate.mapping import map_tool, map_workflow, find_biotools_toolshed_id
-from regate.utils import DynamicObject, write_json_files, get_resource_folder, decode_datafile_from_datauri
+from regate.utils import write_json_files, get_resource_folder, decode_datafile_from_datauri
+from regate.objects import DynamicObject
 
 # init root logger
 logger = logging.getLogger()
@@ -109,11 +110,11 @@ def export_galaxy_resources(config, resource_type, resources_filter=None, ignore
                                                                 resource_loader)
     print(bold("> Loading Galaxy {}s... ".format(resource_type.value)), end='', flush=True)
     if not resources_metadata:
-        resources_metadata = resource_loader(ids=resources_filter, details=True, ignore=ignore_list)
+        resources_metadata = resource_loader(resources_filter, details=True, ignore=ignore_list)
         print_done()
     else:
         to_load = resources_metadata
-        resources_metadata = resource_loader(ids=resources_metadata, details=True)
+        resources_metadata = resource_loader(resources_metadata, details=True)
         if len(to_load) > len(resources_metadata):
             logger.error("Error when loading {}s metadata.".format(resource_type.value))
             print(failure("ERROR: unable to load the following {}s...".format(resource_type.value)))
