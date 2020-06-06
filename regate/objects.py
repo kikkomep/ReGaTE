@@ -10,6 +10,9 @@ class DynamicObject(dict):
         if properties:
             self.merge(properties)
 
+    def __bool__(self):
+        return True
+
     def __getitem__(self, k):
         return self.__getattr__(k)
 
@@ -106,6 +109,9 @@ class Resource(DynamicObject):
             pass
         self.__dict__[name] = value
 
+    def to_json(self):
+        return json.dumps(self._data)
+
     @property
     def data(self) -> object:
         return self._data.copy()
@@ -113,3 +119,11 @@ class Resource(DynamicObject):
     @property
     def platform(self) -> Platform:
         return self._platform
+
+
+class Tool(Resource):
+    pass
+
+
+class Workflow(Resource):
+    pass
