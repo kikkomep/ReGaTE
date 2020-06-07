@@ -1,10 +1,8 @@
-import base64
-import json
 import os
+import json
+import base64
 import urllib
-
 from Cheetah.Template import Template
-
 from regate.edam import get_data_path
 
 

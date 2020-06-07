@@ -1,8 +1,8 @@
-import configparser
 import os
 import logging
+import configparser
 
-from regate.const import _ALLOWED_COMMANDS, _ALLOWED_SOURCES
+from regate.const import COMMAND, PLATFORM
 from regate.edam import get_data_path
 
 logger = logging.getLogger()
@@ -39,8 +39,8 @@ class Config(object):
         self.galaxy_url_api = self.assign("galaxy_server", "galaxy_url_api", ismandatory=True)
         self.api_key = self.assign("galaxy_server", "api_key", ismandatory=True)
         if script == "regate":
-            if options.command != _ALLOWED_COMMANDS.TEMPLATE.value:
-                if options.platform == _ALLOWED_SOURCES.GALAXY.value or "push" in options:
+            if options.command != COMMAND.TEMPLATE.value:
+                if options.platform == PLATFORM.GALAXY.value or "push" in options:
                     self.galaxy_url = self.assign("galaxy_server", "galaxy_url", ismandatory=True)
                     self.transient_instance = self.assign("galaxy_server", "transient_instance", ismandatory=True, boolean=True)
                     self.tools_default = self.assign("galaxy_server", "tools_default", ismandatory=True)
@@ -51,7 +51,7 @@ class Config(object):
                     self.contactTypeEntity = self.assign("galaxy_server", "contactTypeEntity", ismandatory=True)
                     self.contactTypeRole = self.assign("galaxy_server", "contactTypeRole", ismandatory=True)
 
-                if options.platform == _ALLOWED_SOURCES.BIOTOOLS.value or "push" in options:
+                if options.platform == PLATFORM.BIOTOOLS.value or "push" in options:
                     self.login = self.assign("regate_specific_section", "login", ismandatory=True,
                                              message="login option is mandatory to push resources to Elixir")
                     self.bioregistry_host = self.assign("regate_specific_section", "bioregistry_host", ismandatory=True,

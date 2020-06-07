@@ -19,16 +19,20 @@ import logging
 import requests
 import ruamel.yaml
 from logging.handlers import RotatingFileHandler
-from regate.biotools import _build_request_headers, BioToolsPlatform
-from regate.config import load_config, generate_template
-from regate.const import REGATE_DATA_FILE, _RESOURCE_TYPE, _ALLOWED_SOURCES
+
 from regate.edam import load_edam_dict
+from regate.objects import DynamicObject
+from regate.biotools import BioToolsPlatform
+from regate.config import load_config, generate_template
+from regate.const import REGATE_DATA_FILE, RESOURCE, PLATFORM
 from regate.galaxy import GalaxyPlatform, build_filename, get_galaxy_resource_id_label
-from regate.cli.helpers import warning, failure, bold, print_done, print_error, print_exists, prompt, print_logo, build_cli_parser, \
-    prompt_platform_resource_selection
 from regate.mapping import map_tool, map_workflow, find_biotools_toolshed_id
 from regate.utils import write_json_files, get_resource_folder, decode_datafile_from_datauri
-from regate.objects import DynamicObject
+from regate.cli.helpers import (
+    warning, failure, bold,
+    prompt_platform_resource_selection,
+    print_done, print_error, print_exists, prompt, print_logo, build_cli_parser
+)
 
 # init root logger
 logger = logging.getLogger()
@@ -69,15 +73,15 @@ def export_from_galaxy(options):
     GalaxyPlatform.get_instance().configure(config.galaxy_url, config.api_key)
     # Export tools
     tools = []
-    if options.resource == _RESOURCE_TYPE.TOOL.value or options.resource == _RESOURCE_TYPE.ALL.value:
-        tools.extend(export_galaxy_resources(config, _RESOURCE_TYPE.TOOL,
+    if options.resource == RESOURCE.TOOL.value or options.resource == RESOURCE.ALL.value:
+        tools.extend(export_galaxy_resources(config, RESOURCE.TOOL,
                                              options.filter if "filter" in options else None,
                                              ignore_list=config.tools_default))
     # Export workflows
     workflows = []
     # TODO: add ignore list for workflows, ignore=config.tools_default)
-    if options.resource == _RESOURCE_TYPE.WORKFLOW.value or options.resource == _RESOURCE_TYPE.ALL.value:
-        workflows.extend(export_galaxy_resources(config, _RESOURCE_TYPE.WORKFLOW,
+    if options.resource == RESOURCE.WORKFLOW.value or options.resource == RESOURCE.ALL.value:
+        workflows.extend(export_galaxy_resources(config, RESOURCE.WORKFLOW,
                                                  options.filter if "filter" in options else None))
     # Publish tool/workflows
     if options.push:
@@ -88,7 +92,7 @@ def export_from_galaxy(options):
         # collect biotools files
         for biotool in biotools:
             tools_dir = get_resource_folder(config,
-                                            _ALLOWED_SOURCES.BIOTOOLS.value,
+                                            PLATFORM.BIOTOOLS.value,
                                             "workflow" if biotool["toolType"][0] == "Workflow" else "tool")
             filename = os.path.join(tools_dir, "{}.json".format(build_filename(biotool['biotoolsID'], biotool['version'][0])))
             if os.path.exists(filename):
@@ -105,7 +109,7 @@ def export_galaxy_resources(config, resource_type, resources_filter=None, ignore
     resource_id_label = get_galaxy_resource_id_label(resource_type)
     resource_loader = getattr(GalaxyPlatform.get_instance(), "get_{}s".format(resource_type.value))
     if not resources_filter and not config.no_interactive:
-        resources_metadata = prompt_platform_resource_selection(_ALLOWED_SOURCES.GALAXY,
+        resources_metadata = prompt_platform_resource_selection(PLATFORM.GALAXY,
                                                                 resource_type,
                                                                 resource_loader)
     print(bold("> Loading Galaxy {}s... ".format(resource_type.value)), end='', flush=True)
@@ -150,7 +154,7 @@ def build_biotools_files(config, resource_type, galaxy_metadata):
                                                          metadata[get_galaxy_resource_id_label(resource_type)],
                                                          metadata["version"]), end='', flush=True)
             biotools_metadata = map_tool(metadata, config, mapping_edam) \
-                if resource_type == _RESOURCE_TYPE.TOOL else map_workflow(metadata, config, mapping_edam)
+                if resource_type == RESOURCE.TOOL else map_workflow(metadata, config, mapping_edam)
             file_name = build_filename(metadata[get_galaxy_resource_id_label(resource_type)], metadata['version'])
             write_json_files(file_name, biotools_metadata, tools_dir)
             with open(os.path.join(tools_dir, "{}.yaml".format(file_name)), 'w') as outfile:
@@ -172,14 +176,14 @@ def export_from_biotools(options):
     # Export tools
     tools = []
     tools_failures = None
-    if options.resource == _RESOURCE_TYPE.TOOL.value or options.resource == _RESOURCE_TYPE.ALL.value:
-        tok, tools_failures = export_biotools_resources(config, _RESOURCE_TYPE.TOOL, options.filter if "filter" in options else None)
+    if options.resource == RESOURCE.TOOL.value or options.resource == RESOURCE.ALL.value:
+        tok, tools_failures = export_biotools_resources(config, RESOURCE.TOOL, options.filter if "filter" in options else None)
         tools.extend(tok)
     # Export workflows
     workflows = []
     workflows_failures = None
-    if options.resource == _RESOURCE_TYPE.WORKFLOW.value or options.resource == _RESOURCE_TYPE.ALL.value:
-        wok, workflows_failures = export_biotools_resources(config, _RESOURCE_TYPE.WORKFLOW,
+    if options.resource == RESOURCE.WORKFLOW.value or options.resource == RESOURCE.ALL.value:
+        wok, workflows_failures = export_biotools_resources(config, RESOURCE.WORKFLOW,
                                                             options.filter if "filter" in options else None)
         workflows.extend(wok)
     # Publish tool/workflows
@@ -193,19 +197,19 @@ def export_from_biotools(options):
 def export_biotools_resources(config, resource_type, resource_filter=None):
     biotools = None
     bi = BioToolsPlatform.get_instance()
-    resource_loader = bi.get_tools if resource_type == _RESOURCE_TYPE.TOOL else bi.get_workflows
+    resource_loader = bi.get_tools if resource_type == RESOURCE.TOOL else bi.get_workflows
     if not config.no_interactive and not resource_filter:
-        biotools = prompt_platform_resource_selection(_ALLOWED_SOURCES.BIOTOOLS,
+        biotools = prompt_platform_resource_selection(PLATFORM.BIOTOOLS,
                                                       resource_type,
                                                       resource_loader)
     # Build the list of tools to export
     if not biotools:
         # NOTE: the 'only_regate_tools' constraint might be relaxed
-        print(bold("> Loading list of bio.tools {}s... ".format(resource_type.value)), end='')
+        print(bold("> Loading list of bio.tools {}s... ".format(resource_type.value)), end='', flush=True)
         biotools = resource_loader(identifier_list=resource_filter.split(',') if resource_filter else None)
         print_done()
     # init output folder
-    output_folder = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, resource_type.value)
+    output_folder = get_resource_folder(config, PLATFORM.GALAXY.value, resource_type.value)
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
@@ -222,9 +226,9 @@ def export_biotools_resources(config, resource_type, resource_filter=None):
 def build_galaxy_files(config, resource_type, biotools_metadata):
     success = []
     failures = []
-    build_handler = build_galaxy_tool_files if resource_type == _RESOURCE_TYPE.TOOL else build_galaxy_workflow_files
+    build_handler = build_galaxy_tool_files if resource_type == RESOURCE.TOOL else build_galaxy_workflow_files
     for data in biotools_metadata:
-        print("  - {} (id {}, version {})... ".format(data["name"], data["biotoolsID"], data["version"][0]), end='')
+        print("  - {} (id {}, version {})... ".format(data["name"], data["biotoolsID"], data["version"][0]), end='', flush=True)
         result = build_handler(config, data)
         if result:
             success.append(result)
@@ -234,7 +238,7 @@ def build_galaxy_files(config, resource_type, biotools_metadata):
 
 
 def build_galaxy_tool_files(config, tool):
-    output_folder = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, _RESOURCE_TYPE.TOOL.value)
+    output_folder = get_resource_folder(config, PLATFORM.GALAXY.value, RESOURCE.TOOL.value)
     toolshed_info = find_biotools_toolshed_id(tool)
     if toolshed_info:
         data_json = {
@@ -279,7 +283,7 @@ def build_galaxy_tool_files(config, tool):
 
 
 def build_galaxy_workflow_files(config, workflow):
-    output_folder = get_resource_folder(config, _ALLOWED_SOURCES.GALAXY.value, _RESOURCE_TYPE.WORKFLOW.value)
+    output_folder = get_resource_folder(config, PLATFORM.GALAXY.value, RESOURCE.WORKFLOW.value)
     try:
         links = [link["url"] for link in workflow["download"]
                  if link["url"].startswith(config.data_uri_prefix)]
@@ -319,11 +323,11 @@ def push_to_target_platform(options):
     #
     tools_dir = get_resource_folder(config, options.platform, "tool")
     workflows_dir = get_resource_folder(config, options.platform, "workflow")
-    resource_type_list = [t for t in _RESOURCE_TYPE.values() if t == options.resource or options.resource == _RESOURCE_TYPE.ALL.value]
+    resource_type_list = [t for t in RESOURCE.values() if t == options.resource or options.resource == RESOURCE.ALL.value]
 
     for resource_type in resource_type_list:
-        is_tool = resource_type == _RESOURCE_TYPE.TOOL.value
-        is_galaxy_platform = options.platform == _ALLOWED_SOURCES.GALAXY.value
+        is_tool = resource_type == RESOURCE.TOOL.value
+        is_galaxy_platform = options.platform == PLATFORM.GALAXY.value
         resource_dir = tools_dir if is_tool else workflows_dir
         if options.filter:
             tools_filter = options.filter.split(",")
@@ -366,7 +370,7 @@ def push_to_target_platform(options):
     if len(biotools_json_files) == 0:
         print(warning("\n  WARNING: no resource to publish on the bio.tools registry '{}'\n".format(config.bioregistry_host)))
     else:
-        if options.platform == _ALLOWED_SOURCES.BIOTOOLS.value:
+        if options.platform == PLATFORM.BIOTOOLS.value:
             push_to_biotools(config, biotools_json_files, config.resourcename)
         else:
             push_to_galaxy(config, biotools_json_files, check_exists=True)
@@ -498,27 +502,27 @@ def wizard(args):
             'type': 'list',
             'name': 'platform',
             'message': 'Which platform do you want to export from?',
-            'choices': _ALLOWED_SOURCES.values()
+            'choices': PLATFORM.values()
         },
         {
             'type': 'list',
             'name': 'resource',
             'message': 'Which type of resource?',
-            'choices': _RESOURCE_TYPE.values()
+            'choices': RESOURCE.values()
         },
         {
             'type': 'confirm',
             'name': "push",
             'message': 'Would you like to immediately push to bio.tools?',
             'default': True,
-            'when': lambda answers: answers['platform'] == _ALLOWED_SOURCES.GALAXY.value
+            'when': lambda answers: answers['platform'] == PLATFORM.GALAXY.value
         },
         {
             'type': 'confirm',
             'name': "push",
             'message': 'Would you like to immediately push to Galaxy?',
             'default': True,
-            'when': lambda answers: answers['platform'] == _ALLOWED_SOURCES.BIOTOOLS.value
+            'when': lambda answers: answers['platform'] == PLATFORM.BIOTOOLS.value
         }
     ]
 

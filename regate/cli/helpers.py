@@ -1,10 +1,10 @@
-import argparse
 import sys
+import argparse
 from pygments.token import Token
 from PyInquirer import prompt as _prompt
 from prompt_toolkit.styles import style_from_dict
 
-from regate.const import _ALLOWED_SOURCES, _RESOURCE_TYPE
+from regate.const import PLATFORM, RESOURCE
 
 PROMPT_STYLE = style_from_dict({
     Token.Separator: '#6C6C6C',
@@ -17,13 +17,13 @@ PROMPT_STYLE = style_from_dict({
     Token.Question: 'bold',
 })
 
-_PROMPT_OPTIONS = {
+PROMPT_OPTIONS = {
     "style": PROMPT_STYLE
 }
 
 
 def prompt(questions, answers=None):
-    answers = _prompt(questions, answers=None, **_PROMPT_OPTIONS)
+    answers = _prompt(questions, answers=None, **PROMPT_OPTIONS)
     if not answers:
         sys.exit(0)
     return answers
@@ -77,7 +77,7 @@ def print_exists():
 
 
 def format_platform_name(platform):
-    return 'bio.tools' if platform == _ALLOWED_SOURCES.BIOTOOLS else platform.value.capitalize()
+    return 'bio.tools' if platform == PLATFORM.BIOTOOLS else platform.value.capitalize()
 
 
 def prompt_platform_resource_selection(platform,
@@ -85,8 +85,8 @@ def prompt_platform_resource_selection(platform,
                                        resource_loader):
     selected_resources = None
     resource_id_label = 'biotoolsID' \
-        if platform == _ALLOWED_SOURCES.BIOTOOLS \
-        else 'uuid' if resource_type == _RESOURCE_TYPE.WORKFLOW else 'id'
+        if platform == PLATFORM.BIOTOOLS \
+        else 'uuid' if resource_type == RESOURCE.WORKFLOW else 'id'
     questions = [
         {
             'type': 'confirm',
@@ -138,7 +138,7 @@ def build_cli_parser():
     export_parser = sp.add_parser("export",
                                   help="export (and optionally publish) tools and/or workflows ",
                                   formatter_class=lambda prog: argparse.HelpFormatter(prog, width=140, max_help_position=100))
-    export_parser.add_argument("--from", dest="platform", choices=[o.value for o in _ALLOWED_SOURCES],
+    export_parser.add_argument("--from", dest="platform", choices=[o.value for o in PLATFORM],
                                required=True,
                                help="source platform for exporting tools and/or workflows")
     export_parser.add_argument("--push", action='store_true', help="Push tools and/or workflows")
@@ -149,7 +149,7 @@ def build_cli_parser():
     publish_parser = sp.add_parser("push",
                                    help="publish just exported tools and/or workflows",
                                    formatter_class=lambda prog: argparse.HelpFormatter(prog, width=140, max_help_position=100))
-    publish_parser.add_argument("--to", dest="platform", choices=[o.value for o in _ALLOWED_SOURCES], required=True,
+    publish_parser.add_argument("--to", dest="platform", choices=[o.value for o in PLATFORM], required=True,
                                 help="target platform for publishing tools and/or workflows")
     publish_parser.set_defaults(command='push')
     publish_parser.set_defaults(resource='all')
@@ -164,11 +164,11 @@ def build_cli_parser():
         all_res_parser.set_defaults(resource='all')
 
         tool_res_parser = resource_subparsers.add_parser("tools", help="tools")
-        tool_res_parser.set_defaults(resource=_RESOURCE_TYPE.TOOL.value)
+        tool_res_parser.set_defaults(resource=RESOURCE.TOOL.value)
         tool_res_parser.add_argument("--filter", help="list of comma separated tool IDs")
 
         wf_res_parser = resource_subparsers.add_parser("workflows", help="workflows")
-        wf_res_parser.set_defaults(resource=_RESOURCE_TYPE.WORKFLOW.value)
+        wf_res_parser.set_defaults(resource=RESOURCE.WORKFLOW.value)
         wf_res_parser.add_argument("--filter", help="list of comma separated workflow IDs")
 
     return parser

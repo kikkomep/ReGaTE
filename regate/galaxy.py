@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import collections
+import os
 import json
 import logging
-import os
-import re
 import tarfile
 import tempfile
+import collections
 from urllib.parse import urljoin
 from xml.etree import ElementTree as ET
 
@@ -14,7 +13,7 @@ from bioblend import ConnectionError
 from bioblend.galaxy import GalaxyInstance as _GalaxyInstance
 from bioblend.galaxy.objects import GalaxyInstance as _GalaxyObjectInstance
 
-from regate.const import _RESOURCE_TYPE
+from regate.const import RESOURCE
 from regate.objects import Platform, Tool as BaseTool, Workflow as BaseWorkflow
 
 logger = logging.getLogger()
@@ -316,4 +315,4 @@ def build_filename(tool_id, version):
 
 
 def get_galaxy_resource_id_label(resource_type):
-    return 'uuid' if resource_type == _RESOURCE_TYPE.WORKFLOW else 'id'
+    return 'uuid' if resource_type == RESOURCE.WORKFLOW else 'id'

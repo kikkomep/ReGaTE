@@ -1,17 +1,16 @@
 from __future__ import annotations
 
+import re
 import json
 import logging
-import re
 
 import requests
 from urllib.parse import urljoin
 
-from regate.cli.helpers import prompt
-from regate.objects import Tool as BaseTool, Workflow as BaseWorkflow
-from regate.const import _RESOURCE_TYPE
-from regate.mapping import find_biotools_regate_id
+from regate.const import RESOURCE
 from regate.objects import Platform
+from regate.mapping import find_biotools_regate_id
+from regate.objects import Tool as BaseTool, Workflow as BaseWorkflow
 
 logger = logging.getLogger()
 
@@ -70,7 +69,7 @@ class BioToolsPlatform(Platform):
 
     def get_tools(self, identifier_list=None, ignore=None, details=False):
         return self.get_elixir_tools_list(tools_list=identifier_list,
-                                          tool_type=_RESOURCE_TYPE.TOOL,
+                                          tool_type=RESOURCE.TOOL,
                                           tool_collectionID=self.config.resourcename,
                                           only_regate_tools=True)
 
@@ -79,12 +78,12 @@ class BioToolsPlatform(Platform):
 
     def get_workflows(self, identifier_list=None, ignore=None, details=False):
         return self.get_elixir_tools_list(tools_list=identifier_list,
-                                          tool_type=_RESOURCE_TYPE.WORKFLOW,
+                                          tool_type=RESOURCE.WORKFLOW,
                                           tool_collectionID=self.config.resourcename,
                                           only_regate_tools=True)
 
     def get_elixir_tools_list(self,
-                              tools_list=None, tool_type=_RESOURCE_TYPE.TOOL,
+                              tools_list=None, tool_type=RESOURCE.TOOL,
                               tool_collectionID=None, only_regate_tools=False):
         try:
             result = []
@@ -94,7 +93,7 @@ class BioToolsPlatform(Platform):
             # Prepare request parameters
             page = 1
             page_pattern = re.compile(r"\?page=(\d+)")
-            resource_type = "Web application" if tool_type == _RESOURCE_TYPE.TOOL else "Workflow"
+            resource_type = "Web application" if tool_type == RESOURCE.TOOL else "Workflow"
             res_url = urljoin(self.config.bioregistry_host, '/api/tool')
             # load all tools by page
             while page:

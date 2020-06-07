@@ -1,15 +1,15 @@
-import copy
 import re
+import copy
 import urllib
-from urllib.parse import urljoin
 import logging
 import requests
 from datauri import DataURI
-
-from .galaxy import GalaxyPlatform
+from urllib.parse import urljoin
 from .const import REGATE_SEPARATOR, TOOLSHED_PREFIX_ID, REGATE_PREFIX_ID
-from .edam import DEFAULT_EDAM_DATA, DEFAULT_EDAM_FORMAT, DEFAULT_EDAM_OPERATION, DEFAULT_EDAM_TOPIC, find_edam_format, find_edam_data, \
-    edam_to_uri
+from .edam import (
+    DEFAULT_EDAM_DATA, DEFAULT_EDAM_FORMAT, DEFAULT_EDAM_OPERATION,
+    DEFAULT_EDAM_TOPIC, find_edam_format, find_edam_data, edam_to_uri
+)
 
 logger = logging.getLogger()
 
