@@ -114,7 +114,7 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
         ])
 
     ##### Download GROUP ######################################################################################
-    tool_archive = GalaxyPlatform.get_instance().get_galaxy_tool_wrapper_archive(galaxy_metadata['id'])
+    tool_archive = galaxy_metadata.get_wrapper_archive()
     if tool_archive:
         mapping['download'].extend([
             {
@@ -140,7 +140,7 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
         mapping['download'].extend([
             {
                 'type': 'Tool wrapper (galaxy)',
-                'url': urljoin(conf.galaxy_url, "{}/{}/{}".format('api/tools/', galaxy_metadata['id'], 'download')),
+                'url': galaxy_metadata.download_link,
                 'note': "Download {} tool from the Galaxy platform {}".format(galaxy_metadata['name'], conf.galaxy_url),
                 'version': galaxy_metadata['version']
             }
@@ -158,8 +158,7 @@ def map_tool(galaxy_metadata, conf, edam_mapping):
             },
             {
                 'type': 'Other',
-                'url': urljoin(conf.galaxy_url, "{}/{}?".format('api/tools', galaxy_metadata['id'],
-                                                                'io_details=true&link_details=true')),
+                'url': galaxy_metadata.metadata_link,
                 'note': "Tool metadata available on the Galaxy Platform"
             }
         ])

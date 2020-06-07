@@ -21,7 +21,22 @@ logger = logging.getLogger()
 
 
 class Tool(BaseTool):
-    pass
+
+    @property
+    def metadata_link(self):
+        return urljoin(self.platform.url,
+                       "api/tools/{}?io_details=true&link_details=true".format(self.id))
+
+    @property
+    def download_link(self):
+        return urljoin(self.platform.url, "api/tools//{}/download".format(self.id))
+
+    def get_wrapper_archive(self):
+        return self.platform.get_galaxy_tool_wrapper_archive(self.id)
+
+    @property
+    def platform(self) -> GalaxyPlatform:
+        return super().platform
 
 
 class Workflow(BaseWorkflow):
