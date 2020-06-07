@@ -192,8 +192,10 @@ class GalaxyPlatform(Platform):
                     break
             if not workflow_metadata:
                 return None
-            workflow_obj = self._galaxy_instance_obj.workflows.get(workflow_metadata['id'])
+            workflow_id = workflow_metadata['id']
+            workflow_obj = self._galaxy_instance_obj.workflows.get(workflow_id)
             workflow_metadata = workflow_obj.export()
+            workflow_metadata['id'] = workflow_id
             if load_io_details:
                 workflow_io_details = [
                     ('inputs', list(workflow_obj.inputs)),
