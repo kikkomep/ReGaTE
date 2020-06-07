@@ -17,6 +17,7 @@ import json
 import glob
 import logging
 import requests
+import itertools
 import ruamel.yaml
 from logging.handlers import RotatingFileHandler
 
@@ -31,7 +32,7 @@ from regate.utils import write_json_files, get_resource_folder, decode_datafile_
 from regate.cli.helpers import (
     warning, failure, bold,
     prompt_platform_resource_selection,
-    print_done, print_error, print_exists, prompt, print_logo, build_cli_parser
+    print_done, print_error, print_exists, prompt, print_logo, build_cli_parser, success
 )
 
 # init root logger
@@ -71,26 +72,34 @@ def export_from_galaxy(options):
     config = load_config(options)
     # configure the Galaxy instance
     GalaxyPlatform.get_instance().configure(config.galaxy_url, config.api_key)
+
     # Export tools
-    tools = []
+    tools_selected = None
+    tools_exported = None
+    tools_errors = None
     if options.resource == RESOURCE.TOOL.value or options.resource == RESOURCE.ALL.value:
-        tools.extend(export_galaxy_resources(config, RESOURCE.TOOL,
-                                             options.filter if "filter" in options else None,
-                                             ignore_list=config.tools_default))
+        tools_selected, tools_exported, tools_errors = \
+            export_galaxy_resources(config, RESOURCE.TOOL,
+                                    options.filter if "filter" in options else None,
+                                    ignore_list=config.tools_default)
     # Export workflows
-    workflows = []
+    workflows_selected = None
+    workflows_exported = None
+    workflows_errors = None
     # TODO: add ignore list for workflows, ignore=config.tools_default)
     if options.resource == RESOURCE.WORKFLOW.value or options.resource == RESOURCE.ALL.value:
-        workflows.extend(export_galaxy_resources(config, RESOURCE.WORKFLOW,
-                                                 options.filter if "filter" in options else None))
+        workflows_selected, workflows_exported, workflows_errors = \
+            export_galaxy_resources(config, RESOURCE.WORKFLOW,
+                                    options.filter if "filter" in options else None)
     # Publish tool/workflows
+    biotools_json_files = None
+    tools_pushed = tools_push_errors = None
+    workflows_pushed = workflows_push_errors = None
     if options.push:
         # Build list of BioTools JSON files to publish
         biotools_json_files = []
-        biotools = tools.copy()
-        biotools.extend(workflows)
         # collect biotools files
-        for biotool in biotools:
+        for biotool in itertools.chain(tools_exported or [], workflows_exported or []):
             tools_dir = get_resource_folder(config,
                                             PLATFORM.BIOTOOLS.value,
                                             "workflow" if biotool["toolType"][0] == "Workflow" else "tool")
@@ -101,7 +110,33 @@ def export_from_galaxy(options):
         if len(biotools_json_files) == 0:
             print(warning("\n  WARNING: no resource to publish on the ELIXIR registry '{}'\n".format(config.bioregistry_host)))
         else:
-            push_to_biotools(config, biotools_json_files, config.resourcename)
+            tools_pushed, tools_push_errors, workflows_pushed, workflows_push_errors = \
+                push_to_biotools(config, biotools_json_files, config.resourcename)
+    #
+    print_report(tools_selected=tools_selected, tools_exported=tools_exported, tools_errors=tools_errors,
+                 tools_pushed=tools_pushed, tools_push_errors=tools_push_errors,
+                 workflows_selected=workflows_selected,
+                 workflows_exported=workflows_exported, workflows_errors=workflows_errors,
+                 workflows_pushed=workflows_pushed, workflows_push_errors=workflows_push_errors)
+
+
+def print_report(**kwargs):
+    print("\n")
+    for resource in ("tools", "workflows"):
+        selected = kwargs.get("{}_selected".format(resource))
+        exported = kwargs.get("{}_exported".format(resource))
+        pushed = kwargs.get("{}_pushed".format(resource))
+        errors = kwargs.get("{}_errors".format(resource))
+        push_errors = kwargs.get("{}_push_errors".format(resource))
+        if selected:
+            print(" > {} {} selected, {} export ok, {} push ok, {} export failures, {} push errors".format(
+                bold("{}:{}".format(resource.upper(), ' ' * 4 if resource == "tools" else '')),
+                warning(len(selected) if selected else 0),
+                success(len(exported) if exported else 0),
+                success(len(pushed) if pushed else 0),
+                failure(len(errors) if errors else 0),
+                failure(len(push_errors) if push_errors else 0)))
+    print("\n")
 
 
 def export_galaxy_resources(config, resource_type, resources_filter=None, ignore_list=None):
@@ -127,8 +162,8 @@ def export_galaxy_resources(config, resource_type, resources_filter=None, ignore
         else:
             print_done()
     # Generate BioTools files for both tools and workflows
-    biotools_metadata = build_biotools_files(config, resource_type=resource_type, galaxy_metadata=resources_metadata)
-    return biotools_metadata
+    exported, errors = build_biotools_files(config, resource_type=resource_type, galaxy_metadata=resources_metadata)
+    return resources_metadata, exported, errors
 
 
 def build_biotools_files(config, resource_type, galaxy_metadata):
@@ -145,6 +180,7 @@ def build_biotools_files(config, resource_type, galaxy_metadata):
     mapping_edam = load_edam_dict(config)
 
     # write tools
+    errors = []
     mappings = []
     if len(galaxy_metadata) > 0:
         print(bold("> Exporting {}s to the bio.tools format...".format(resource_type.value)))
@@ -163,9 +199,10 @@ def build_biotools_files(config, resource_type, galaxy_metadata):
             print_done()
         except Exception as e:
             print_error()
+            errors.append(metadata)
             if logger.level == logging.DEBUG:
                 logger.exception(e)
-    return mappings
+    return mappings, errors
 
 
 def export_from_biotools(options):
@@ -174,24 +211,37 @@ def export_from_biotools(options):
     # config BioToolsPlatform instance
     BioToolsPlatform.get_instance().configure(config)
     # Export tools
-    tools = []
-    tools_failures = None
+    tools_selected = None
+    tools_exported = None
+    tools_errors = None
     if options.resource == RESOURCE.TOOL.value or options.resource == RESOURCE.ALL.value:
-        tok, tools_failures = export_biotools_resources(config, RESOURCE.TOOL, options.filter if "filter" in options else None)
-        tools.extend(tok)
+        tools_selected, tools_exported, tools_errors = \
+            export_biotools_resources(config, RESOURCE.TOOL,
+                                      options.filter if "filter" in options else None)
     # Export workflows
-    workflows = []
+    workflows_selected = None
+    workflows_exported = None
+    workflows_errors = None
     workflows_failures = None
     if options.resource == RESOURCE.WORKFLOW.value or options.resource == RESOURCE.ALL.value:
-        wok, workflows_failures = export_biotools_resources(config, RESOURCE.WORKFLOW,
-                                                            options.filter if "filter" in options else None)
-        workflows.extend(wok)
+        workflows_selected, workflows_exported, workflows_failures = \
+            export_biotools_resources(config, RESOURCE.WORKFLOW,
+                                      options.filter if "filter" in options else None)
     # Publish tool/workflows
+    tools_pushed = tools_push_errors = None
+    workflows_pushed = workflows_push_errors = None
     if options.push:
         # Build list of BioTools JSON files to publish
-        galaxy_json_files = [resource[REGATE_DATA_FILE] for resource in tools] + \
-                            [resource[REGATE_DATA_FILE] for resource in workflows]
-        push_to_galaxy(config, galaxy_json_files, check_exists=True)
+        galaxy_json_files = [resource[REGATE_DATA_FILE] for resource in tools_exported] + \
+                            [resource[REGATE_DATA_FILE] for resource in workflows_exported]
+        tools_pushed, tools_push_errors, workflows_pushed, workflows_push_errors = \
+            push_to_galaxy(config, galaxy_json_files, check_exists=True)
+    #
+    print_report(tools_selected=tools_selected, tools_exported=tools_exported, tools_errors=tools_errors,
+                 tools_pushed=tools_pushed, tools_push_errors=tools_push_errors,
+                 workflows_selected=workflows_selected,
+                 workflows_exported=workflows_exported, workflows_errors=workflows_errors,
+                 workflows_pushed=workflows_pushed, workflows_push_errors=workflows_push_errors)
 
 
 def export_biotools_resources(config, resource_type, resource_filter=None):
@@ -220,7 +270,7 @@ def export_biotools_resources(config, resource_type, resource_filter=None):
     else:
         print(bold("> Exporting bio.tools {}s to the Galaxy format... ".format(resource_type.value)))
         success, failures = build_galaxy_files(config, resource_type, biotools)
-    return success, failures
+    return biotools, success, failures
 
 
 def build_galaxy_files(config, resource_type, biotools_metadata):
@@ -323,16 +373,20 @@ def push_to_target_platform(options):
     #
     tools_dir = get_resource_folder(config, options.platform, "tool")
     workflows_dir = get_resource_folder(config, options.platform, "workflow")
-    resource_type_list = [t for t in RESOURCE.values() if t == options.resource or options.resource == RESOURCE.ALL.value]
-
+    resource_type_list = [t for t in [RESOURCE.TOOL.value, RESOURCE.WORKFLOW.value]
+                          if t == options.resource or options.resource == RESOURCE.ALL.value]
+    tools_selected = []
+    workflows_selected = []
     for resource_type in resource_type_list:
         is_tool = resource_type == RESOURCE.TOOL.value
         is_galaxy_platform = options.platform == PLATFORM.GALAXY.value
         resource_dir = tools_dir if is_tool else workflows_dir
-        if options.filter:
+        if 'filter' in options and options.filter:
             tools_filter = options.filter.split(",")
-            biotools_json_files.extend([f for f in glob.glob(os.path.join(resource_dir, "*.json"))
-                                        if os.path.isfile(f) and os.path.splitext(os.path.basename(f))[0] in tools_filter])
+            selection = [f for f in glob.glob(os.path.join(resource_dir, "*.json"))
+                         if os.path.isfile(f) and os.path.splitext(os.path.basename(f))[0] in tools_filter]
+            biotools_json_files.extend(selection)
+            tools_selected.extend(selection) if is_tool else workflows_selected.extend(selection)
         elif not options.no_interactive:
             tools_files = [f for f in glob.glob(os.path.join(resource_dir, "*.json")) if os.path.isfile(f)]
             tools = {}
@@ -363,17 +417,29 @@ def push_to_target_platform(options):
                     }
                 ]
                 answers = prompt(questions)
-                biotools_json_files.extend([t for k, t in tools.items() if k in answers["tools"]])
+                selection = [t for k, t in tools.items() if k in answers["tools"]]
+                biotools_json_files.extend(selection)
+                tools_selected.extend(selection) if is_tool else workflows_selected.extend(selection)
         else:
-            biotools_json_files.extend([f for f in glob.glob(os.path.join(resource_dir, "*.json")) if os.path.isfile(f)])
+            selection = [f for f in glob.glob(os.path.join(resource_dir, "*.json")) if os.path.isfile(f)]
+            tools_selected.extend(selection) if is_tool else workflows_selected.extend(selection)
+            biotools_json_files.extend(selection)
 
+    tools_pushed = tools_push_errors = None
+    workflows_pushed = workflows_push_errors = None
     if len(biotools_json_files) == 0:
         print(warning("\n  WARNING: no resource to publish on the bio.tools registry '{}'\n".format(config.bioregistry_host)))
     else:
         if options.platform == PLATFORM.BIOTOOLS.value:
-            push_to_biotools(config, biotools_json_files, config.resourcename)
+            tools_pushed, tools_push_errors, workflows_pushed, workflows_push_errors = \
+                push_to_biotools(config, biotools_json_files, config.resourcename)
         else:
-            push_to_galaxy(config, biotools_json_files, check_exists=True)
+            tools_pushed, tools_push_errors, workflows_pushed, workflows_push_errors = \
+                push_to_galaxy(config, biotools_json_files, check_exists=True)
+    #
+    print_report(tools_selected=tools_selected, workflows_selected=workflows_selected,
+                 tools_pushed=tools_pushed, tools_push_errors=tools_push_errors,
+                 workflows_pushed=workflows_pushed, workflows_push_errors=workflows_push_errors)
 
 
 def biotools_authenticate(config):
@@ -402,9 +468,6 @@ def push_to_biotools(config, biotools_json_data_list, resourcename):
     :param tool_dir:
     :return:
     """
-    success = []
-    errors = []
-
     # init BioTools
     BioToolsPlatform.get_instance().configure(config)
 
@@ -416,6 +479,10 @@ def push_to_biotools(config, biotools_json_data_list, resourcename):
     print(bold("> Pushing tools and workflows on the bio.tools platform..."))
 
     # POST BioTool JSON files
+    tools_pushed = []
+    tools_errors = []
+    workflows_pushed = []
+    workflows_errors = []
     for json_data in biotools_json_data_list:
         if isinstance(json_data, str) and os.path.isfile(json_data):
             with open(json_data, 'r') as jsonfile:
@@ -431,16 +498,17 @@ def push_to_biotools(config, biotools_json_data_list, resourcename):
             bi.remove_existing_elixir_tool_version(json_data['biotoolsID'], json_data['version'][0], resourcename)
             bi.push_tool(json_string)
             logger.debug("{0} ok".format(json_data["name"]))
-            success.append(json_data)
+            workflows_pushed.append(json_data) \
+                if json_data["toolType"][0] == "Workflow" else tools_pushed.append(json_data)
             print_done()
         except Exception as e:
             logger.error("{0} ko, error".format(json_data["name"]))
-            errors.append(json_data)
+            workflows_errors.append(json_data) \
+                if json_data["toolType"][0] == "Workflow" else tools_errors.append(json_data)
             print_error()
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
-    logger.info("import finished, ok={0}, ko={1}".format(len(success), len(errors)))
-    return success, errors
+    return tools_pushed, tools_errors, workflows_pushed, workflows_errors
 
 
 def push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
@@ -449,8 +517,6 @@ def push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
     gi.configure(config.galaxy_url, config.api_key)
     # Preload all JSON files
     tools = []
-    success = []
-    errors = []
     workflows = []
     for galaxy_json_file in galaxy_json_data_list:
         try:
@@ -467,7 +533,12 @@ def push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
             logger.error("Error when loading file '%s'", galaxy_json_file)
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
-    # Load Galaxy tools
+
+    # Push Galaxy tools/workflows
+    tools_pushed = []
+    tools_errors = []
+    workflows_pushed = []
+    workflows_errors = []
     for resources in [tools, workflows]:
         if len(resources) > 0:
             # Import all tools/workflows
@@ -485,15 +556,21 @@ def push_to_galaxy(config, galaxy_json_data_list, check_exists=True):
                         continue
                     if resources == tools:
                         gi.import_tool(resource)
+                        tools_pushed.append(resource)
                     else:
                         gi.import_workflow(resource)
-                    success.append(resource)
+                        workflows_pushed.append(resource)
                     print_done()
                 except Exception as e:
                     print_error()
-                    errors.append(resource)
+                    if resources == tools:
+                        tools_errors.append(resource)
+                    else:
+                        workflows_errors.append(resource)
                     if logger.isEnabledFor(logging.DEBUG):
                         logger.exception(e)
+    return tools_pushed, tools_errors, \
+           workflows_pushed, workflows_errors
 
 
 def wizard(args):
