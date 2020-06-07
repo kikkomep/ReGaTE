@@ -6,14 +6,13 @@ import logging
 import requests
 from datauri import DataURI
 
-
 from .galaxy import GalaxyPlatform
 from .const import REGATE_SEPARATOR, TOOLSHED_PREFIX_ID, REGATE_PREFIX_ID
 from .edam import DEFAULT_EDAM_DATA, DEFAULT_EDAM_FORMAT, DEFAULT_EDAM_OPERATION, DEFAULT_EDAM_TOPIC, find_edam_format, find_edam_data, \
     edam_to_uri
 
-
 logger = logging.getLogger()
+
 
 def map_tool(galaxy_metadata, conf, edam_mapping):
     """
@@ -236,7 +235,6 @@ def map_workflow(galaxy_metadata, conf, mapping_edam):
                                            mimetype="application/json"),
                 'note': "Galaxy Workflow definition as base64 encoded data URI on the 'data' URL parameter.",
                 'version': galaxy_metadata['version']
-
             }
         ],
 
