@@ -116,28 +116,6 @@ def prompt_platform_resource_selection(platform,
     return selected_resources
 
 
-def print_logo():
-    _REGATE_LOGO = """
-    RRRRRRRRRRRRRRRRR                             GGGGGGGGGGGGG             TTTTTTTTTTTTTTTTTTTTTTEEEEEEEEEEEEEEEEEEEEEE
-    R::::::::::::::::R                         GGG::::::::::::G             T:::::::::::::::::::::E::::::::::::::::::::E
-    R::::::RRRRRR:::::R                      GG:::::::::::::::G             T:::::::::::::::::::::E::::::::::::::::::::E
-    RR:::::R     R:::::R                    G:::::GGGGGGGG::::G             T:::::TT:::::::TT:::::EE::::::EEEEEEEEE::::E
-    R::::R     R:::::R   eeeeeeeeeeee    G:::::G       GGGGGG aaaaaaaaaaaaTTTTTT  T:::::T  TTTTTT E:::::E       EEEEEE
-    R::::R     R:::::R ee::::::::::::ee G:::::G               a::::::::::::a      T:::::T         E:::::E             
-    R::::RRRRRR:::::R e::::::eeeee:::::eG:::::G               aaaaaaaaa:::::a     T:::::T         E::::::EEEEEEEEEE   
-    R:::::::::::::RR e::::::e     e:::::G:::::G    GGGGGGGGGG          a::::a     T:::::T         E:::::::::::::::E   
-    R::::RRRRRR:::::Re:::::::eeeee::::::G:::::G    G::::::::G   aaaaaaa:::::a     T:::::T         E:::::::::::::::E   
-    R::::R     R:::::e:::::::::::::::::eG:::::G    GGGGG::::G aa::::::::::::a     T:::::T         E::::::EEEEEEEEEE   
-    R::::R     R:::::e::::::eeeeeeeeeee G:::::G        G::::Ga::::aaaa::::::a     T:::::T         E:::::E             
-    R::::R     R:::::e:::::::e           G:::::G       G::::a::::a    a:::::a     T:::::T         E:::::E       EEEEEE
-    RR:::::R     R:::::e::::::::e           G:::::GGGGGGGG::::a::::a    a:::::a   TT:::::::TT     EE::::::EEEEEEEE:::::E
-    R::::::R     R:::::Re::::::::eeeeeeee    GG:::::::::::::::a:::::aaaa::::::a   T:::::::::T     E::::::::::::::::::::E
-    R::::::R     R:::::R ee:::::::::::::e      GGG::::::GGG:::Ga::::::::::aa:::a  T:::::::::T     E::::::::::::::::::::E
-    RRRRRRRR     RRRRRRR   eeeeeeeeeeeeee         GGGGGG   GGGG aaaaaaaaaa  aaaa  TTTTTTTTTTT     EEEEEEEEEEEEEEEEEEEEEE
-    """
-    print(_REGATE_LOGO)
-
-
 def build_cli_parser():
     parser = argparse.ArgumentParser(description="Bridging Tool for Galaxy and Biotools Registry",
                                      formatter_class=lambda prog: argparse.HelpFormatter(prog, width=140, max_help_position=100))
@@ -194,3 +172,27 @@ def build_cli_parser():
         wf_res_parser.add_argument("--filter", help="list of comma separated workflow IDs")
 
     return parser
+
+
+REGATE_LOGO = """
+    RRRRRRRRRRRRRRRRR                             GGGGGGGGGGGGG             TTTTTTTTTTTTTTTTTTTTTTEEEEEEEEEEEEEEEEEEEEEE
+    R::::::::::::::::R                         GGG::::::::::::G             T:::::::::::::::::::::E::::::::::::::::::::E
+    R::::::RRRRRR:::::R                      GG:::::::::::::::G             T:::::::::::::::::::::E::::::::::::::::::::E
+    RR:::::R     R:::::R                    G:::::GGGGGGGG::::G             T:::::TT:::::::TT:::::EE::::::EEEEEEEEE::::E
+    R::::R     R:::::R   eeeeeeeeeeee    G:::::G       GGGGGG aaaaaaaaaaaaTTTTTT  T:::::T  TTTTTT E:::::E       EEEEEE
+    R::::R     R:::::R ee::::::::::::ee G:::::G               a::::::::::::a      T:::::T         E:::::E             
+    R::::RRRRRR:::::R e::::::eeeee:::::eG:::::G               aaaaaaaaa:::::a     T:::::T         E::::::EEEEEEEEEE   
+    R:::::::::::::RR e::::::e     e:::::G:::::G    GGGGGGGGGG          a::::a     T:::::T         E:::::::::::::::E   
+    R::::RRRRRR:::::Re:::::::eeeee::::::G:::::G    G::::::::G   aaaaaaa:::::a     T:::::T         E:::::::::::::::E   
+    R::::R     R:::::e:::::::::::::::::eG:::::G    GGGGG::::G aa::::::::::::a     T:::::T         E::::::EEEEEEEEEE   
+    R::::R     R:::::e::::::eeeeeeeeeee G:::::G        G::::Ga::::aaaa::::::a     T:::::T         E:::::E             
+    R::::R     R:::::e:::::::e           G:::::G       G::::a::::a    a:::::a     T:::::T         E:::::E       EEEEEE
+    RR:::::R     R:::::e::::::::e           G:::::GGGGGGGG::::a::::a    a:::::a   TT:::::::TT     EE::::::EEEEEEEE:::::E
+    R::::::R     R:::::Re::::::::eeeeeeee    GG:::::::::::::::a:::::aaaa::::::a   T:::::::::T     E::::::::::::::::::::E
+    R::::::R     R:::::R ee:::::::::::::e      GGG::::::GGG:::Ga::::::::::aa:::a  T:::::::::T     E::::::::::::::::::::E
+    RRRRRRRR     RRRRRRR   eeeeeeeeeeeeee         GGGGGG   GGGG aaaaaaaaaa  aaaa  TTTTTTTTTTT     EEEEEEEEEEEEEEEEEEEEEE
+    """
+
+
+def print_logo():
+    print(REGATE_LOGO)

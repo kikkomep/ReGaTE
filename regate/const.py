@@ -1,6 +1,7 @@
 from enum import Enum
 
 REGATE_SEPARATOR = "_____"
+REGATE_PREFIX_ID = "biotools:regate"
 TOOLSHED_PREFIX_ID = "biotools:toolshed"
 REGATE_DATA_FILE = "regate_data_file"
 
@@ -32,6 +33,3 @@ class _ALLOWED_COMMANDS(Enum):
     @staticmethod
     def values():
         return [o.value for o in _ALLOWED_COMMANDS]
-
-
-REGATE_PREFIX_ID = "biotools:regate"
