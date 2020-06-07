@@ -1,5 +1,4 @@
 import copy
-import json
 import re
 import urllib
 from urllib.parse import urljoin
@@ -9,7 +8,7 @@ from datauri import DataURI
 
 
 from .galaxy import GalaxyPlatform
-from .const import REGATE_SEPARATOR, TOOLSHED_PREFIX_ID
+from .const import REGATE_SEPARATOR, TOOLSHED_PREFIX_ID, REGATE_PREFIX_ID
 from .edam import DEFAULT_EDAM_DATA, DEFAULT_EDAM_FORMAT, DEFAULT_EDAM_OPERATION, DEFAULT_EDAM_TOPIC, find_edam_format, find_edam_data, \
     edam_to_uri
 
@@ -491,9 +490,6 @@ def build_tool_name(tool_id, prefix, suffix):
     if suffix and (len(tool_name) + len(suffix) <= 100):
         tool_name = tool_name + '-' + str(suffix)
     return tool_name
-
-
-REGATE_PREFIX_ID = "biotools:regate"
 
 
 def build_function_dict(json_tool, mapping_edam):

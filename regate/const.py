@@ -32,3 +32,6 @@ class _ALLOWED_COMMANDS(Enum):
     @staticmethod
     def values():
         return [o.value for o in _ALLOWED_COMMANDS]
+
+
+REGATE_PREFIX_ID = "biotools:regate"
