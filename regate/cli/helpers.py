@@ -106,7 +106,7 @@ def prompt_platform_resource_selection(platform,
         questions = [
             {
                 'type': 'checkbox',
-                'message': 'Select workflows',
+                'message': 'Select {}s'.format(resource_type.value),
                 'name': 'resources',
                 'choices': [{'name': w} for w in list(resources)],
             }
