@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import collections
 import json
 import logging
@@ -5,6 +7,7 @@ import os
 import re
 import tarfile
 import tempfile
+from urllib.parse import urljoin
 from xml.etree import ElementTree as ET
 
 from bioblend import ConnectionError
@@ -27,9 +30,19 @@ class Workflow(BaseWorkflow):
         super().__init__(platform, data)
         if "uuid" not in data and 'latest_workflow_uuid' in data:
             self.uuid = data['latest_workflow_uuid']
+
     @property
-    def id(self):
-        return self.uuid
+    def service_link(self):
+        return urljoin(self.platform.url, "workflow/display_by_id?id={}".format(self.id))
+
+    @property
+    def download_link(self):
+        return urljoin(self.platform.url,
+                       "{}/{}/download?format=json-download".format('api/workflows/', self.id))
+
+    @property
+    def platform(self) -> GalaxyPlatform:
+        return super().platform
 
 
 class GalaxyPlatform(Platform):
@@ -43,6 +56,10 @@ class GalaxyPlatform(Platform):
         if not self._galaxy_instance:
             raise Exception("Bioblend API not initialized")
         return self._galaxy_instance
+
+    @property
+    def url(self):
+        return self.api.base_url
 
     def configure(self, galaxy_url, galaxy_api_key):
         self._galaxy_instance = _GalaxyInstance(galaxy_url, key=galaxy_api_key)

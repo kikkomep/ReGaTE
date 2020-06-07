@@ -269,26 +269,20 @@ def map_workflow(galaxy_metadata, conf, mapping_edam):
     # Miscellaneous links for the software: e.g., repository, issue tracker, etc.
     # see https://biotools.readthedocs.io/en/latest/curators_guide.html#linktype for the available link types
     if not conf.transient_instance:
-        mapping['link'].extend([
-            {
-                'type': 'Galaxy service',
-                'url': "{}?id={}".format(urljoin(conf.galaxy_url, '/workflow/display_by_id'), galaxy_metadata['uuid']),
-                'note': 'View and run the workflow "{}" on the Galaxy Platform'.format(galaxy_metadata['name'])
-            }
-        ])
+        mapping['link'].append({
+            'type': 'Galaxy service',
+            'url': galaxy_metadata.service_link,
+            'note': 'View and run the workflow "{}" on the Galaxy Platform'.format(galaxy_metadata['name'])
+        })
 
     ##### Download GROUP ######################################################################################
     if not conf.transient_instance:
-        mapping['download'].extend([
-            {
-                'type': 'Tool wrapper (galaxy)',
-                'url': urljoin(conf.galaxy_url,
-                               "{}/{}/download?format=json-download".format('api/workflows/', galaxy_metadata['uuid'])),
-                'note': build_description_note(galaxy_metadata) + "[provided by Galaxy Platform]",
-                # FIXME: check string
-                'version': galaxy_metadata['version']
-            }
-        ])
+        mapping['download'].append({
+            'type': 'Tool wrapper (galaxy)',
+            'url': galaxy_metadata.download_link,
+            'note': build_description_note(galaxy_metadata) + " [provided by Galaxy Platform]",
+            'version': galaxy_metadata['version']
+        })
 
     result = copy.deepcopy(mapping)
     clean_dict(result)
