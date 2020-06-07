@@ -203,7 +203,7 @@ class GalaxyPlatform(Platform):
                     ('operations', set(workflow_obj.steps) - workflow_obj.sink_ids - set(workflow_obj.inputs))
                 ]
                 for collection, _ in workflow_io_details:
-                    if not collection in workflow_metadata:
+                    if collection not in workflow_metadata:
                         workflow_metadata[collection] = []
                 for collection, steps in workflow_io_details:
                     for step in steps:
