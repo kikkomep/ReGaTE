@@ -378,6 +378,7 @@ def push_to_target_platform(options):
     tools_selected = []
     workflows_selected = []
     for resource_type in resource_type_list:
+        selection = None
         is_tool = resource_type == RESOURCE.TOOL.value
         is_galaxy_platform = options.platform == PLATFORM.GALAXY.value
         resource_dir = tools_dir if is_tool else workflows_dir
@@ -420,7 +421,8 @@ def push_to_target_platform(options):
                 selection = [t for k, t in tools.items() if k in answers["tools"]]
                 biotools_json_files.extend(selection)
                 tools_selected.extend(selection) if is_tool else workflows_selected.extend(selection)
-        else:
+        # select all files by default
+        if not selection:
             selection = [f for f in glob.glob(os.path.join(resource_dir, "*.json")) if os.path.isfile(f)]
             tools_selected.extend(selection) if is_tool else workflows_selected.extend(selection)
             biotools_json_files.extend(selection)
