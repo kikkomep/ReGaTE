@@ -592,14 +592,14 @@ def wizard(args):
         {
             'type': 'confirm',
             'name': "push",
-            'message': 'Would you like to immediately push to bio.tools?',
+            'message': 'Would you like to push the exported resources to bio.tools?',
             'default': True,
             'when': lambda answers: answers['platform'] == PLATFORM.GALAXY.value
         },
         {
             'type': 'confirm',
             'name': "push",
-            'message': 'Would you like to immediately push to Galaxy?',
+            'message': 'Would you like to push the exported resources to Galaxy?',
             'default': True,
             'when': lambda answers: answers['platform'] == PLATFORM.BIOTOOLS.value
         }
