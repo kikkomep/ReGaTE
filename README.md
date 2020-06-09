@@ -25,7 +25,7 @@ pip install .
 
 Type `regate` to run `ReGaTE` interactively:
 
-<img src="https://s7.gifyu.com/images/ReGaTE.gif?raw=true" width="100%">
+<img src="doc/media/ReGaTE.gif?raw=true" width="100%">
 
 
 
