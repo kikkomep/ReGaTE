@@ -11,47 +11,18 @@ Created on Jun. 16, 2014
 @githuborganization: bioinfo-center-pasteur-fr
 """
 
-import string
 import os
 import sys
 import ruamel.yaml
 import rdflib
 import argparse
-from . import regate
+
+import regate.config
 
 from bioblend.galaxy import GalaxyInstance
 from bioblend.galaxy.client import ConnectionError
-from bioblend.galaxy.datatypes import DatatypesClient
-from bioblend.galaxy.client import Client
 
-
-class EdamDatatypesClient(DatatypesClient):
-    """
-    Override of the bioblend DatatypesClient class to add a get_edam_formats method
-    """
-
-    def get_edam_formats(self):
-        """
-        Displays a collection (dict) of edam formats.
-        :rtype: dict
-        :return: A dict of  individual edam_format.
-                 For example::
-             {
-                "RData": "format_2333",
-                "Roadmaps": "format_2561",
-                "Sequences": "format_1929",
-                "ab1": "format_2333",
-                "acedb": "format_2330",
-                "affybatch": "format_2331",
-                "afg": "format_2561",
-                "arff": "format_2330",
-                "asn1": "format_2330",
-                "asn1-binary": "format_2333"}
-        """
-        url = self.gi._make_url(self)
-        url = '/'.join([url, "edam_formats"])
-
-        return Client._get(self, url=url)
+from regate.edam import EdamDatatypesClient
 
 
 def is_true(value):
@@ -131,7 +102,7 @@ def edam_to_dict(edam_file):
         else:
             format_with_formats[child_format] = [parent_format]
     for row in g.query(query3):
-        term_labels[http_to_edamform(row[0].toPython())]=str(row[1].toPython())
+        term_labels[http_to_edamform(row[0].toPython())] = str(row[1].toPython())
     return format_with_formats, format_with_data, term_labels
 
 
@@ -176,9 +147,9 @@ def add_datas(dict_map, rel_format_formats, rel_format_data, term_labels):
     for key, value in dict_map.items():
         formats = copy.copy(value)
         datas = add_data(formats, rel_format_formats, rel_format_data, list_edam_data=[])
-        datas_v = [{'uri':data_item,'term':term_labels.get(data_item,'')} for data_item in datas]
-        formats_v = [{'uri':format_item,'term':term_labels.get(format_item,'')} for format_item in value]
-        dict_map[key] = {'formats':formats_v, 'data':datas_v}
+        datas_v = [{'uri': data_item, 'term': term_labels.get(data_item, '')} for data_item in datas]
+        formats_v = [{'uri': format_item, 'term': term_labels.get(format_item, '')} for format_item in value]
+        dict_map[key] = {'formats': formats_v, 'data': datas_v}
     return dict_map
 
 
@@ -211,6 +182,7 @@ def galaxy_to_edamdict(url, key):
         dictmapping[str(key)] = [form_edam]
     return dictmapping
 
+
 def run():
     parser = argparse.ArgumentParser(description="Galaxy instance tool\
         parsing, for integration in biotools/bioregistry")
@@ -226,13 +198,13 @@ def run():
     if not args.templateconfig:
         if not os.path.exists(args.config_file):
             raise IOError("{0} doesn't exist".format(args.config_file))
-        config = regate.Config(args.config_file, "remag")
+        config = regate.config.Config(args.config_file, "remag")
         dict_mapping = galaxy_to_edamdict(config.galaxy_url_api, config.api_key)
         relation_format_formats, relation_format_data, term_labels = edam_to_dict(config.edam_file)
         yaml_file = config.output_yaml
         dict_mapping = add_datas(dict_mapping, relation_format_formats, relation_format_data, term_labels)
         dict_to_yaml(dict_mapping, yaml_file)
     elif args.templateconfig:
-        regate.generate_template()
+        regate.config.generate_template()
     else:
         parser.print_help()

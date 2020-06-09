@@ -17,7 +17,7 @@ setup(
     author='Olivia Doppelt-Azeroual and Fabien Mareuil',
     author_email='olivia.doppelt@pasteur.fr and fabien.mareuil@pasteur.fr',
     url='https://github.com/bioinfo-center-pasteur-fr/ReGaTE',
-    packages=['regate'],
+    packages=['regate', 'regate.cli'],
     install_requires=[
         'ruamel.yaml',
         'html5lib',
@@ -30,9 +30,9 @@ setup(
     ],
     license="GPLv2",
     entry_points={
-          'console_scripts': ['regate=regate.regate:run',
-                              'remag=regate.remag:run'],
-        },
+        'console_scripts': ['regate=regate.cli.regate:run',
+                            'remag=regate.cli.remag:run'],
+    },
     tests_require=['nose', 'nose_parameterized'],
     test_suite='nose.collector',
     include_package_data=True,
