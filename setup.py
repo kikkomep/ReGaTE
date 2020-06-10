@@ -17,7 +17,7 @@ with open("requirements.txt") as reqs:
 
 setup(
     name='regate',
-    version='0.10.0',
+    version='1.0.0_beta',
     description='Registration of Galaxy Tools in Elixir',
     long_description=readme,
     keywords=['GalaxyProject'],
