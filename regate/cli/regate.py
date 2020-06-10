@@ -628,12 +628,13 @@ def run():
     logging.getLogger("requests").setLevel(logging.ERROR)
     parser = build_cli_parser()
     args = parser.parse_args()
-    # Append logger to the console if debug mode is enabled
+    # Append logger to the console
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(logging.Formatter("%(message)s"))
     if args.debug:
-        stream_handler = logging.StreamHandler()
-        stream_handler.setLevel(logging.DEBUG)
         stream_handler.setFormatter(formatter)
-        logger.addHandler(stream_handler)
+    logger.addHandler(stream_handler)
+
     # configure log level
     logger.setLevel(logging.DEBUG if args.debug else logging.INFO)
     logger.debug("CLI options: %s", args)
@@ -653,3 +654,8 @@ def run():
         sys.exit(1)
     except KeyboardInterrupt as e:
         logger.error("'%s' command interrupted by user", args.command)
+    except Exception as e:
+        logger.error(e)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
+
