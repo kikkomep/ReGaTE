@@ -654,3 +654,8 @@ def run():
         sys.exit(1)
     except KeyboardInterrupt as e:
         logger.error("'%s' command interrupted by user", args.command)
+    except Exception as e:
+        logger.error(e)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
+
