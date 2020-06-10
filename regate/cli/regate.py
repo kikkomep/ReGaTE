@@ -103,12 +103,14 @@ def export_from_galaxy(options):
             tools_dir = get_resource_folder(config,
                                             PLATFORM.BIOTOOLS.value,
                                             "workflow" if biotool["toolType"][0] == "Workflow" else "tool")
-            filename = os.path.join(tools_dir, "{}.json".format(build_filename(biotool['biotoolsID'], biotool['version'][0])))
+            filename = os.path.join(tools_dir, "{}.json".format(
+                build_filename(biotool['biotoolsID'], biotool['version'][0])))
             if os.path.exists(filename):
                 biotools_json_files.append(filename)
         # Publish BioTools files
         if len(biotools_json_files) == 0:
-            print(warning("\n  WARNING: no resource to publish on the ELIXIR registry '{}'\n".format(config.bioregistry_host)))
+            print(warning(
+                "\n  WARNING: no resource to publish on the ELIXIR registry '{}'\n".format(config.bioregistry_host)))
         else:
             tools_pushed, tools_push_errors, workflows_pushed, workflows_push_errors = \
                 push_to_biotools(config, biotools_json_files, config.resourcename)
@@ -157,7 +159,8 @@ def export_galaxy_resources(config, resource_type, resources_filter=None, ignore
         if len(to_load) > len(resources_metadata):
             logger.error("Error when loading {}s metadata.".format(resource_type.value))
             print(failure("ERROR: unable to load the following {}s...".format(resource_type.value)))
-            for w in [wf for wf in to_load if wf[resource_id_label] not in [wfm[resource_id_label] for wfm in resources_metadata]]:
+            for w in [wf for wf in to_load
+                      if wf[resource_id_label] not in [wfm[resource_id_label] for wfm in resources_metadata]]:
                 print("  {} {} (id {}, version {})".format(failure("X"), w['name'], w[resource_id_label], w['version']))
         else:
             print_done()
@@ -278,7 +281,9 @@ def build_galaxy_files(config, resource_type, biotools_metadata):
     failures = []
     build_handler = build_galaxy_tool_files if resource_type == RESOURCE.TOOL else build_galaxy_workflow_files
     for data in biotools_metadata:
-        print("  - {} (id {}, version {})... ".format(data["name"], data["biotoolsID"], data["version"][0]), end='', flush=True)
+        print("  - {} (id {}, version {})... ".format(data["name"],
+                                                      data["biotoolsID"],
+                                                      data["version"][0]), end='', flush=True)
         result = build_handler(config, data)
         if result:
             success.append(result)
@@ -396,7 +401,8 @@ def push_to_target_platform(options):
                     tool = json.load(tool_file)
                     tools["{} (id {}, version {})".format(
                         tool["name"],
-                        tool["id" if is_galaxy_platform and is_tool else "uuid" if is_galaxy_platform else "biotoolsID"],
+                        tool[
+                            "id" if is_galaxy_platform and is_tool else "uuid" if is_galaxy_platform else "biotoolsID"],
                         tool["version"] if is_galaxy_platform else tool["version"][0]
                     )] = tool
             questions = [
@@ -430,7 +436,8 @@ def push_to_target_platform(options):
     tools_pushed = tools_push_errors = None
     workflows_pushed = workflows_push_errors = None
     if len(biotools_json_files) == 0:
-        print(warning("\n  WARNING: no resource to publish on the bio.tools registry '{}'\n".format(config.bioregistry_host)))
+        print(warning("\n  WARNING: no resource to publish "
+                      "on the bio.tools registry '{}'\n".format(config.bioregistry_host)))
     else:
         if options.platform == PLATFORM.BIOTOOLS.value:
             tools_pushed, tools_push_errors, workflows_pushed, workflows_push_errors = \
@@ -493,7 +500,9 @@ def push_to_biotools(config, biotools_json_data_list, resourcename):
         else:
             json_string = json.dumps(json_data)
         print(" - {} (id {}, version {})... ".format(json_data['name'],
-                                                     json_data['biotoolsID'], json_data['version'][0]), end='', flush=True)
+                                                     json_data['biotoolsID'],
+                                                     json_data['version'][0]), end='',
+              flush=True)
         try:
             # TODO: replace removal with a proper upgrade
             bi = BioToolsPlatform.get_instance()
