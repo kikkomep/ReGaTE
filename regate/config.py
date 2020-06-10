@@ -21,7 +21,7 @@ def generate_template(filename="regate.ini"):
     :return:
     """
     if os.path.exists(filename):
-        raise FileExistsError("Filename '%s' already exists!", filename)
+        raise FileExistsError("Filename '%s' already exists!" % filename)
     template_config = get_data_path('regate.ini')
     with open(template_config, 'r') as configtemplate:
         with open(filename, 'w') as fp:
