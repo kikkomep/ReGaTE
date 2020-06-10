@@ -13,7 +13,6 @@ ReGaTE is a command line utility that automates the registration of tools and wo
 1) Clone this Git repository and install *ReGaTE* via `pip`:
 
 ```[language="bash"]
-pip install -r requirements.txt
 pip install .
 ```
 
